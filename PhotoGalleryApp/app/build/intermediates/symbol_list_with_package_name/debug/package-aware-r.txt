@@ -3143,6 +3143,7 @@ id bounceBoth
 id bounceEnd
 id bounceStart
 id buttonAddToThreeDaysLater
+id buttonDelete
 id buttonPanel
 id cache_measures
 id callMeasure

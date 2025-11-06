@@ -26,6 +26,9 @@ public final class ActivityImageViewerBinding implements ViewBinding {
   public final Button buttonAddToThreeDaysLater;
 
   @NonNull
+  public final Button buttonDelete;
+
+  @NonNull
   public final LinearLayout layoutControls;
 
   @NonNull
@@ -35,10 +38,12 @@ public final class ActivityImageViewerBinding implements ViewBinding {
   public final ViewPager2 viewPager;
 
   private ActivityImageViewerBinding(@NonNull RelativeLayout rootView,
-      @NonNull Button buttonAddToThreeDaysLater, @NonNull LinearLayout layoutControls,
-      @NonNull TextView textViewPageInfo, @NonNull ViewPager2 viewPager) {
+      @NonNull Button buttonAddToThreeDaysLater, @NonNull Button buttonDelete,
+      @NonNull LinearLayout layoutControls, @NonNull TextView textViewPageInfo,
+      @NonNull ViewPager2 viewPager) {
     this.rootView = rootView;
     this.buttonAddToThreeDaysLater = buttonAddToThreeDaysLater;
+    this.buttonDelete = buttonDelete;
     this.layoutControls = layoutControls;
     this.textViewPageInfo = textViewPageInfo;
     this.viewPager = viewPager;
@@ -77,6 +82,12 @@ public final class ActivityImageViewerBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.buttonDelete;
+      Button buttonDelete = ViewBindings.findChildViewById(rootView, id);
+      if (buttonDelete == null) {
+        break missingId;
+      }
+
       id = R.id.layoutControls;
       LinearLayout layoutControls = ViewBindings.findChildViewById(rootView, id);
       if (layoutControls == null) {
@@ -96,7 +107,7 @@ public final class ActivityImageViewerBinding implements ViewBinding {
       }
 
       return new ActivityImageViewerBinding((RelativeLayout) rootView, buttonAddToThreeDaysLater,
-          layoutControls, textViewPageInfo, viewPager);
+          buttonDelete, layoutControls, textViewPageInfo, viewPager);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

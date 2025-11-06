@@ -27,10 +27,10 @@ com.example.photogallery.app-jetified-customview-poolingcontainer-1.0.0-25 C:\Us
 com.example.photogallery.app-jetified-glide-4.16.0-26 C:\Users\92892\.gradle\caches\transforms-3\eee122987f46041aea427aa7f7f82694\transformed\jetified-glide-4.16.0\res
 com.example.photogallery.app-drawerlayout-1.1.1-27 C:\Users\92892\.gradle\caches\transforms-3\efb1f4e56f313902f2a4eda4f51f44fa\transformed\drawerlayout-1.1.1\res
 com.example.photogallery.app-coordinatorlayout-1.1.0-28 C:\Users\92892\.gradle\caches\transforms-3\f3e35f94573bf9e824ef1039f0fdc6f4\transformed\coordinatorlayout-1.1.0\res
-com.example.photogallery.app-pngs-29 D:\files\projects\tmp\PhotoGalleryApp\app\build\generated\res\pngs\debug
-com.example.photogallery.app-resValues-30 D:\files\projects\tmp\PhotoGalleryApp\app\build\generated\res\resValues\debug
-com.example.photogallery.app-packageDebugResources-31 D:\files\projects\tmp\PhotoGalleryApp\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
-com.example.photogallery.app-packageDebugResources-32 D:\files\projects\tmp\PhotoGalleryApp\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
-com.example.photogallery.app-merged_res-33 D:\files\projects\tmp\PhotoGalleryApp\app\build\intermediates\merged_res\debug
-com.example.photogallery.app-debug-34 D:\files\projects\tmp\PhotoGalleryApp\app\src\debug\res
-com.example.photogallery.app-main-35 D:\files\projects\tmp\PhotoGalleryApp\app\src\main\res
+com.example.photogallery.app-pngs-29 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\build\generated\res\pngs\debug
+com.example.photogallery.app-resValues-30 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\build\generated\res\resValues\debug
+com.example.photogallery.app-packageDebugResources-31 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.example.photogallery.app-packageDebugResources-32 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.example.photogallery.app-merged_res-33 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\build\intermediates\merged_res\debug
+com.example.photogallery.app-debug-34 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\src\debug\res
+com.example.photogallery.app-main-35 D:\files\projects\A_gallery_TR\PhotoGalleryApp\app\src\main\res

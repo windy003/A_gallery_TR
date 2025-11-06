@@ -8,6 +8,7 @@ color white
 drawable ic_launcher_foreground
 drawable ic_launcher_legacy
 id buttonAddToThreeDaysLater
+id buttonDelete
 id imageViewCover
 id imageViewPhoto
 id layoutControls
