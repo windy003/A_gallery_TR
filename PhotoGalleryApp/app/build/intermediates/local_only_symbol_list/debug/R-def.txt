@@ -1,0 +1,26 @@
+R_DEF: Internal format may change without notice
+local
+color black
+color colorAccent
+color colorPrimary
+color colorPrimaryDark
+color white
+drawable ic_launcher_foreground
+drawable ic_launcher_legacy
+id buttonAddToThreeDaysLater
+id imageViewCover
+id imageViewPhoto
+id layoutControls
+id recyclerViewFolders
+id recyclerViewPhotos
+id textViewFolderName
+id textViewPageInfo
+id textViewPhotoCount
+id viewPager
+layout activity_gallery
+layout activity_image_viewer
+layout activity_main
+layout item_folder
+layout item_photo
+mipmap ic_launcher
+string app_name
