@@ -104,6 +104,9 @@ public class MainActivity extends AppCompatActivity {
         }
         folders.add(allPhotosFolder);
 
+        // 清理无效的照片路径（照片已被删除但路径仍在日期文件夹中）
+        cleanupInvalidPhotoPaths(allPhotos);
+
         // 添加今天的日期文件夹
         String todayDate = DateFolderManager.getTodayDate();
         List<String> todayPhotoPaths = dateFolderManager.getPhotosForDate(todayDate);
@@ -119,7 +122,10 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-            folders.add(todayFolder);
+            // 只添加包含有效照片的文件夹
+            if (todayFolder.getPhotos().size() > 0) {
+                folders.add(todayFolder);
+            }
         }
 
         // 添加其他日期文件夹
@@ -138,7 +144,10 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }
                     }
-                    folders.add(folder);
+                    // 只添加包含有效照片的文件夹
+                    if (folder.getPhotos().size() > 0) {
+                        folders.add(folder);
+                    }
                 }
             }
         }
@@ -152,6 +161,32 @@ public class MainActivity extends AppCompatActivity {
         });
 
         recyclerViewFolders.setAdapter(folderAdapter);
+    }
+
+    private void cleanupInvalidPhotoPaths(List<Photo> allPhotos) {
+        // 获取所有有效照片的路径
+        List<String> validPhotoPaths = new ArrayList<>();
+        for (Photo photo : allPhotos) {
+            validPhotoPaths.add(photo.getPath());
+        }
+
+        // 遍历所有日期文件夹，删除无效的照片路径
+        List<String> dateFolders = dateFolderManager.getAllDateFolders();
+        for (String date : dateFolders) {
+            List<String> photoPaths = dateFolderManager.getPhotosForDate(date);
+            List<String> invalidPaths = new ArrayList<>();
+
+            for (String photoPath : photoPaths) {
+                if (!validPhotoPaths.contains(photoPath)) {
+                    invalidPaths.add(photoPath);
+                }
+            }
+
+            // 删除无效路径
+            for (String invalidPath : invalidPaths) {
+                dateFolderManager.removePhotoFromDateFolder(invalidPath, date);
+            }
+        }
     }
 
     @Override
