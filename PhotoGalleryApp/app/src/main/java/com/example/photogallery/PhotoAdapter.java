@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
@@ -15,6 +16,7 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
     private Context context;
     private List<Photo> photos;
     private OnPhotoClickListener listener;
+    private DateFolderManager dateFolderManager;
 
     public interface OnPhotoClickListener {
         void onPhotoClick(int position);
@@ -24,6 +26,7 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
         this.context = context;
         this.photos = photos;
         this.listener = listener;
+        this.dateFolderManager = new DateFolderManager(context);
     }
 
     @NonNull
@@ -42,6 +45,10 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
                 .centerCrop()
                 .into(holder.imageViewPhoto);
 
+        // Check if photo is in any date folder
+        boolean isInDateFolder = isPhotoInAnyDateFolder(photo.getPath());
+        holder.textViewAdded.setVisibility(isInDateFolder ? View.VISIBLE : View.GONE);
+
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onPhotoClick(position);
@@ -54,12 +61,28 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
         return photos.size();
     }
 
+    /**
+     * Check if a photo is in any date folder
+     */
+    private boolean isPhotoInAnyDateFolder(String photoPath) {
+        List<String> dateFolders = dateFolderManager.getAllDateFolders();
+        for (String date : dateFolders) {
+            List<String> photoPaths = dateFolderManager.getPhotosForDate(date);
+            if (photoPaths.contains(photoPath)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static class PhotoViewHolder extends RecyclerView.ViewHolder {
         ImageView imageViewPhoto;
+        TextView textViewAdded;
 
         public PhotoViewHolder(@NonNull View itemView) {
             super(itemView);
             imageViewPhoto = itemView.findViewById(R.id.imageViewPhoto);
+            textViewAdded = itemView.findViewById(R.id.textViewAdded);
         }
     }
 }
