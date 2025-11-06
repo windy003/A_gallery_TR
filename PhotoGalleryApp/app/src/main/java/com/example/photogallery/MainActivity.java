@@ -6,6 +6,8 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.widget.Toast;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -22,11 +24,23 @@ public class MainActivity extends AppCompatActivity {
     private List<Folder> folders;
     private PhotoManager photoManager;
     private DateFolderManager dateFolderManager;
+    private ActivityResultLauncher<Intent> galleryLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // 注册GalleryActivity的结果监听器
+        galleryLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        // GalleryActivity返回OK，说明有变化，刷新文件夹列表
+                        loadFolders();
+                    }
+                }
+        );
 
         recyclerViewFolders = findViewById(R.id.recyclerViewFolders);
         recyclerViewFolders.setLayoutManager(new LinearLayoutManager(this));
@@ -78,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadFolders() {
         folders = new ArrayList<>();
+
+        // 重新加载 DateFolderManager 以获取最新数据
+        dateFolderManager = new DateFolderManager(this);
 
         // 添加"所有图片"文件夹
         List<Photo> allPhotos = photoManager.getAllPhotos();
@@ -131,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
             intent.putExtra("folder_name", folder.getName());
             intent.putExtra("folder_display_name", folder.getDisplayName());
             intent.putExtra("is_date_folder", folder.isDateFolder());
-            startActivity(intent);
+            galleryLauncher.launch(intent);
         });
 
         recyclerViewFolders.setAdapter(folderAdapter);

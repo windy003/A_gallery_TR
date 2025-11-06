@@ -2,6 +2,8 @@ package com.example.photogallery;
 
 import android.content.Intent;
 import android.os.Bundle;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -15,11 +17,24 @@ public class GalleryActivity extends AppCompatActivity {
     private String folderName;
     private String folderDisplayName;
     private boolean isDateFolder;
+    private ActivityResultLauncher<Intent> imageViewerLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_gallery);
+
+        // 注册ImageViewerActivity的结果监听器
+        imageViewerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        // ImageViewerActivity返回OK，说明有变化，传递给MainActivity
+                        setResult(RESULT_OK);
+                        loadPhotos(); // 刷新当前列表
+                    }
+                }
+        );
 
         folderName = getIntent().getStringExtra("folder_name");
         folderDisplayName = getIntent().getStringExtra("folder_display_name");
@@ -66,7 +81,7 @@ public class GalleryActivity extends AppCompatActivity {
             intent.putExtra("position", position);
             intent.putExtra("folder_name", folderName);
             intent.putExtra("is_date_folder", isDateFolder);
-            startActivity(intent);
+            imageViewerLauncher.launch(intent);
         });
 
         recyclerViewPhotos.setAdapter(photoAdapter);

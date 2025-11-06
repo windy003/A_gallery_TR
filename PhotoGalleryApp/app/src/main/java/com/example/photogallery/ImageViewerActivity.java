@@ -32,6 +32,8 @@ public class ImageViewerActivity extends AppCompatActivity {
     private boolean controlsVisible = true;
     private ImagePagerAdapter adapter;
     private ActivityResultLauncher<IntentSenderRequest> deleteRequestLauncher;
+    private String folderName;
+    private boolean isDateFolder;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +61,8 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         photos = (ArrayList<Photo>) getIntent().getSerializableExtra("photos");
         currentPosition = getIntent().getIntExtra("position", 0);
+        folderName = getIntent().getStringExtra("folder_name");
+        isDateFolder = getIntent().getBooleanExtra("is_date_folder", false);
 
         dateFolderManager = new DateFolderManager(this);
 
@@ -96,6 +100,9 @@ public class ImageViewerActivity extends AppCompatActivity {
             String threeDaysLaterDate = DateFolderManager.getDateAfterDays(3);
 
             dateFolderManager.addPhotoToDateFolder(currentPhoto.getPath(), threeDaysLaterDate);
+
+            // 设置result，通知上级Activity刷新
+            setResult(RESULT_OK);
 
             Toast.makeText(this,
                     "已添加到 " + threeDaysLaterDate + " 的文件夹",
@@ -167,12 +174,27 @@ public class ImageViewerActivity extends AppCompatActivity {
     }
 
     private void performDeleteCleanup() {
-        // 从适配器中移除
-        adapter.removePhoto(currentPosition);
+        if (currentPosition >= 0 && currentPosition < photos.size()) {
+            Photo deletedPhoto = photos.get(currentPosition);
+
+            // 从所有日期文件夹中移除该照片
+            dateFolderManager.removePhotoFromAllDateFolders(deletedPhoto.getPath());
+
+            // 从适配器中移除
+            adapter.removePhoto(currentPosition);
+        }
 
         // 如果删除后列表为空，关闭Activity
         if (photos.isEmpty()) {
             Toast.makeText(this, "照片已删除", Toast.LENGTH_SHORT).show();
+            setResult(RESULT_OK);
+            finish();
+            return;
+        }
+
+        // 如果是日期文件夹且已经空了，关闭Activity
+        if (isDateFolder && folderName != null && dateFolderManager.isDateFolderEmpty(folderName)) {
+            Toast.makeText(this, "文件夹已清空", Toast.LENGTH_SHORT).show();
             setResult(RESULT_OK);
             finish();
             return;

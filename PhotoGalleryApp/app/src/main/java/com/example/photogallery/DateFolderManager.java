@@ -68,6 +68,39 @@ public class DateFolderManager {
         }
     }
 
+    // 从所有日期文件夹中删除照片
+    public void removePhotoFromAllDateFolders(String photoPath) {
+        boolean modified = false;
+        List<String> emptyDates = new ArrayList<>();
+
+        for (Map.Entry<String, List<String>> entry : dateFolders.entrySet()) {
+            List<String> photos = entry.getValue();
+            if (photos.remove(photoPath)) {
+                modified = true;
+                if (photos.isEmpty()) {
+                    emptyDates.add(entry.getKey());
+                }
+            }
+        }
+
+        // 删除空的日期文件夹
+        for (String date : emptyDates) {
+            dateFolders.remove(date);
+        }
+
+        if (modified) {
+            saveDateFolders();
+        }
+    }
+
+    // 检查日期文件夹是否为空
+    public boolean isDateFolderEmpty(String date) {
+        if (!dateFolders.containsKey(date)) {
+            return true;
+        }
+        return dateFolders.get(date).isEmpty();
+    }
+
     public List<String> getPhotosForDate(String date) {
         return dateFolders.getOrDefault(date, new ArrayList<>());
     }
