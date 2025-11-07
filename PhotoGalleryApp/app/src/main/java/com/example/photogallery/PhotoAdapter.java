@@ -10,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHolder> {
@@ -45,9 +46,22 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
                 .centerCrop()
                 .into(holder.imageViewPhoto);
 
-        // Check if photo is in any date folder
-        boolean isInDateFolder = isPhotoInAnyDateFolder(photo.getPath());
-        holder.textViewAdded.setVisibility(isInDateFolder ? View.VISIBLE : View.GONE);
+        // Get all date folders containing this photo
+        List<String> dateFolders = getDateFoldersForPhoto(photo.getPath());
+        if (dateFolders.isEmpty()) {
+            holder.textViewAdded.setVisibility(View.GONE);
+        } else {
+            holder.textViewAdded.setVisibility(View.VISIBLE);
+            // Format dates as MM-DD and join with space
+            StringBuilder dateText = new StringBuilder();
+            for (int i = 0; i < dateFolders.size(); i++) {
+                if (i > 0) {
+                    dateText.append(" ");
+                }
+                dateText.append(formatDateShort(dateFolders.get(i)));
+            }
+            holder.textViewAdded.setText(dateText.toString());
+        }
 
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
@@ -62,17 +76,29 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
     }
 
     /**
-     * Check if a photo is in any date folder
+     * Get all date folders containing this photo
      */
-    private boolean isPhotoInAnyDateFolder(String photoPath) {
-        List<String> dateFolders = dateFolderManager.getAllDateFolders();
-        for (String date : dateFolders) {
+    private List<String> getDateFoldersForPhoto(String photoPath) {
+        List<String> result = new ArrayList<>();
+        List<String> allDateFolders = dateFolderManager.getAllDateFolders();
+        for (String date : allDateFolders) {
             List<String> photoPaths = dateFolderManager.getPhotosForDate(date);
             if (photoPaths.contains(photoPath)) {
-                return true;
+                result.add(date);
             }
         }
-        return false;
+        return result;
+    }
+
+    /**
+     * Format date from yyyy-MM-dd to MM-dd
+     */
+    private String formatDateShort(String fullDate) {
+        if (fullDate != null && fullDate.length() >= 10) {
+            // Extract MM-dd from yyyy-MM-dd
+            return fullDate.substring(5);
+        }
+        return fullDate;
     }
 
     static class PhotoViewHolder extends RecyclerView.ViewHolder {

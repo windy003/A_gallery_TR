@@ -22,9 +22,11 @@
         android:paddingEnd="6dp"
         android:paddingTop="2dp"
         android:paddingBottom="2dp"
-        android:text="已"
+        android:text=""
         android:textColor="#FFFFFF"
-        android:textSize="12sp"
+        android:textSize="10sp"
+        android:maxLines="2"
+        android:ellipsize="end"
         android:visibility="gone" />
 
 </FrameLayout>
