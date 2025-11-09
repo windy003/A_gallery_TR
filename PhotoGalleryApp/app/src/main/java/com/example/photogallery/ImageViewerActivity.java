@@ -99,13 +99,40 @@ public class ImageViewerActivity extends AppCompatActivity {
             Photo currentPhoto = photos.get(currentPosition);
             String threeDaysLaterDate = DateFolderManager.getDateAfterDays(3);
 
+            // 如果当前在日期文件夹中，先从当前文件夹删除
+            if (isDateFolder && folderName != null) {
+                dateFolderManager.removePhotoFromDateFolder(currentPhoto.getPath(), folderName);
+            }
+
+            // 添加到3天后的文件夹
             dateFolderManager.addPhotoToDateFolder(currentPhoto.getPath(), threeDaysLaterDate);
+
+            // 从适配器中移除当前照片
+            if (isDateFolder) {
+                adapter.removePhoto(currentPosition);
+
+                // 如果列表为空，关闭Activity
+                if (photos.isEmpty()) {
+                    Toast.makeText(this, "已移动到 " + threeDaysLaterDate, Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK);
+                    finish();
+                    return;
+                }
+
+                // 调整当前位置
+                if (currentPosition >= photos.size()) {
+                    currentPosition = photos.size() - 1;
+                }
+
+                // 更新页面信息
+                updatePageInfo();
+            }
 
             // 设置result，通知上级Activity刷新
             setResult(RESULT_OK);
 
             Toast.makeText(this,
-                    "已添加到 " + threeDaysLaterDate + " 的文件夹",
+                    "已移动到 " + threeDaysLaterDate + " 的文件夹",
                     Toast.LENGTH_SHORT).show();
         }
     }
