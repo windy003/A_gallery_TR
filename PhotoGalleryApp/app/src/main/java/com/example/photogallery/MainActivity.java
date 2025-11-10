@@ -24,6 +24,7 @@ public class MainActivity extends AppCompatActivity {
     private List<Folder> folders;
     private PhotoManager photoManager;
     private DateFolderManager dateFolderManager;
+    private IconManager iconManager;
     private ActivityResultLauncher<Intent> galleryLauncher;
 
     @Override
@@ -47,6 +48,7 @@ public class MainActivity extends AppCompatActivity {
 
         photoManager = new PhotoManager(this);
         dateFolderManager = new DateFolderManager(this);
+        iconManager = new IconManager(this);
 
         if (checkPermissions()) {
             loadFolders();
@@ -161,6 +163,9 @@ public class MainActivity extends AppCompatActivity {
         });
 
         recyclerViewFolders.setAdapter(folderAdapter);
+
+        // 更新应用图标（根据日期文件夹状态）
+        iconManager.updateAppIcon();
     }
 
     private void cleanupInvalidPhotoPaths(List<Photo> allPhotos) {
