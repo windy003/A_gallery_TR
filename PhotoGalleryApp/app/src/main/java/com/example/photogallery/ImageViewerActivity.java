@@ -28,12 +28,14 @@ public class ImageViewerActivity extends AppCompatActivity {
     private TextView textViewPageInfo;
     private List<Photo> photos;
     private int currentPosition;
-    private DateFolderManager dateFolderManager;
     private boolean controlsVisible = true;
     private ImagePagerAdapter adapter;
     private ActivityResultLauncher<IntentSenderRequest> deleteRequestLauncher;
+    private ActivityResultLauncher<IntentSenderRequest> delayDeleteRequestLauncher;
     private String folderName;
     private boolean isDateFolder;
+    private FileOperationHelper fileOperationHelper;
+    private Photo photoToDelay; // 临时存储待延迟的图片
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +55,19 @@ public class ImageViewerActivity extends AppCompatActivity {
                 }
         );
 
+        // 初始化延迟操作中的删除请求启动器
+        delayDeleteRequestLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartIntentSenderForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        // 用户确认删除旧文件，延迟操作完成
+                        performDelayCleanup();
+                    } else {
+                        Toast.makeText(this, "延迟操作已取消", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+
         viewPager = findViewById(R.id.viewPager);
         layoutControls = findViewById(R.id.layoutControls);
         buttonAddToThreeDaysLater = findViewById(R.id.buttonAddToThreeDaysLater);
@@ -64,7 +79,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         folderName = getIntent().getStringExtra("folder_name");
         isDateFolder = getIntent().getBooleanExtra("is_date_folder", false);
 
-        dateFolderManager = new DateFolderManager(this);
+        fileOperationHelper = new FileOperationHelper(this);
 
         setupViewPager();
         setupControls();
@@ -95,46 +110,78 @@ public class ImageViewerActivity extends AppCompatActivity {
     }
 
     private void addToThreeDaysLater() {
-        if (currentPosition < photos.size()) {
-            Photo currentPhoto = photos.get(currentPosition);
-            String threeDaysLaterDate = DateFolderManager.getDateAfterDays(3);
+        if (currentPosition >= photos.size()) {
+            return;
+        }
 
-            // 如果当前在日期文件夹中，先从当前文件夹删除
-            if (isDateFolder && folderName != null) {
-                dateFolderManager.removePhotoFromDateFolder(currentPhoto.getPath(), folderName);
-            }
+        Photo currentPhoto = photos.get(currentPosition);
+        photoToDelay = currentPhoto; // 保存引用，供删除回调使用
 
-            // 添加到3天后的文件夹
-            dateFolderManager.addPhotoToDateFolder(currentPhoto.getPath(), threeDaysLaterDate);
+        Toast.makeText(this, "正在复制文件...", Toast.LENGTH_SHORT).show();
 
-            // 从适配器中移除当前照片
-            if (isDateFolder) {
-                adapter.removePhoto(currentPosition);
+        // 第一步：复制文件（新文件会有新的DATE_ADDED）
+        new Thread(() -> {
+            long newPhotoId = fileOperationHelper.copyImageFile(currentPhoto);
 
-                // 如果列表为空，关闭Activity
-                if (photos.isEmpty()) {
-                    Toast.makeText(this, "已移动到 " + threeDaysLaterDate, Toast.LENGTH_SHORT).show();
-                    setResult(RESULT_OK);
-                    finish();
+            runOnUiThread(() -> {
+                if (newPhotoId == -1) {
+                    Toast.makeText(this, "复制文件失败", Toast.LENGTH_SHORT).show();
                     return;
                 }
 
-                // 调整当前位置
-                if (currentPosition >= photos.size()) {
-                    currentPosition = photos.size() - 1;
-                }
+                // 第二步：删除旧文件
+                fileOperationHelper.deleteImage(currentPhoto.getId(), new FileOperationHelper.DeleteCallback() {
+                    @Override
+                    public void onDeleteSuccess() {
+                        // 删除成功，完成延迟操作
+                        performDelayCleanup();
+                    }
 
-                // 更新页面信息
-                updatePageInfo();
-            }
+                    @Override
+                    public void onDeleteNeedPermission(PendingIntent pendingIntent) {
+                        // 需要用户授权删除
+                        IntentSenderRequest request = new IntentSenderRequest.Builder(
+                                pendingIntent.getIntentSender()).build();
+                        delayDeleteRequestLauncher.launch(request);
+                    }
 
-            // 设置result，通知上级Activity刷新
+                    @Override
+                    public void onDeleteFailed(String error) {
+                        Toast.makeText(ImageViewerActivity.this,
+                                "删除旧文件失败: " + error, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            });
+        }).start();
+    }
+
+    /**
+     * 延迟操作完成后的清理工作
+     */
+    private void performDelayCleanup() {
+        // 从适配器中移除当前照片
+        adapter.removePhoto(currentPosition);
+
+        // 如果列表为空，关闭Activity
+        if (photos.isEmpty()) {
+            Toast.makeText(this, "延迟操作完成", Toast.LENGTH_SHORT).show();
             setResult(RESULT_OK);
-
-            Toast.makeText(this,
-                    "已移动到 " + threeDaysLaterDate + " 的文件夹",
-                    Toast.LENGTH_SHORT).show();
+            finish();
+            return;
         }
+
+        // 调整当前位置
+        if (currentPosition >= photos.size()) {
+            currentPosition = photos.size() - 1;
+        }
+
+        // 更新页面信息
+        updatePageInfo();
+
+        // 设置result，通知上级Activity刷新
+        setResult(RESULT_OK);
+
+        Toast.makeText(this, "延迟操作完成，文件将在3天后显示", Toast.LENGTH_SHORT).show();
     }
 
     private void updatePageInfo() {
@@ -202,11 +249,6 @@ public class ImageViewerActivity extends AppCompatActivity {
 
     private void performDeleteCleanup() {
         if (currentPosition >= 0 && currentPosition < photos.size()) {
-            Photo deletedPhoto = photos.get(currentPosition);
-
-            // 从所有日期文件夹中移除该照片
-            dateFolderManager.removePhotoFromAllDateFolders(deletedPhoto.getPath());
-
             // 从适配器中移除
             adapter.removePhoto(currentPosition);
         }
@@ -214,14 +256,6 @@ public class ImageViewerActivity extends AppCompatActivity {
         // 如果删除后列表为空，关闭Activity
         if (photos.isEmpty()) {
             Toast.makeText(this, "照片已删除", Toast.LENGTH_SHORT).show();
-            setResult(RESULT_OK);
-            finish();
-            return;
-        }
-
-        // 如果是日期文件夹且已经空了，关闭Activity
-        if (isDateFolder && folderName != null && dateFolderManager.isDateFolderEmpty(folderName)) {
-            Toast.makeText(this, "文件夹已清空", Toast.LENGTH_SHORT).show();
             setResult(RESULT_OK);
             finish();
             return;

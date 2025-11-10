@@ -23,7 +23,6 @@ public class MainActivity extends AppCompatActivity {
     private FolderAdapter folderAdapter;
     private List<Folder> folders;
     private PhotoManager photoManager;
-    private DateFolderManager dateFolderManager;
     private IconManager iconManager;
     private ActivityResultLauncher<Intent> galleryLauncher;
 
@@ -47,7 +46,6 @@ public class MainActivity extends AppCompatActivity {
         recyclerViewFolders.setLayoutManager(new LinearLayoutManager(this));
 
         photoManager = new PhotoManager(this);
-        dateFolderManager = new DateFolderManager(this);
         iconManager = new IconManager(this);
 
         if (checkPermissions()) {
@@ -95,62 +93,34 @@ public class MainActivity extends AppCompatActivity {
     private void loadFolders() {
         folders = new ArrayList<>();
 
-        // 重新加载 DateFolderManager 以获取最新数据
-        dateFolderManager = new DateFolderManager(this);
+        // 获取所有图片
+        List<Photo> allPhotos = photoManager.getAllPhotos();
 
         // 添加"所有图片"文件夹
-        List<Photo> allPhotos = photoManager.getAllPhotos();
         Folder allPhotosFolder = new Folder("all_photos", "所有图片");
         for (Photo photo : allPhotos) {
             allPhotosFolder.addPhoto(photo);
         }
         folders.add(allPhotosFolder);
 
-        // 清理无效的照片路径（照片已被删除但路径仍在日期文件夹中）
-        cleanupInvalidPhotoPaths(allPhotos);
+        // 使用PhotoManager的新方法：根据DATE_ADDED+3天自动分组
+        java.util.Map<String, List<Photo>> photosByDate = photoManager.getPhotosByDisplayDate();
 
-        // 添加今天的日期文件夹
-        String todayDate = DateFolderManager.getTodayDate();
-        List<String> todayPhotoPaths = dateFolderManager.getPhotosForDate(todayDate);
-        if (!todayPhotoPaths.isEmpty()) {
-            Folder todayFolder = new Folder(todayDate, todayDate);
-            todayFolder.setDateFolder(true);
-            for (String photoPath : todayPhotoPaths) {
-                // 从allPhotos中找到对应的Photo对象
-                for (Photo photo : allPhotos) {
-                    if (photo.getPath().equals(photoPath)) {
-                        todayFolder.addPhoto(photo);
-                        break;
-                    }
-                }
-            }
-            // 只添加包含有效照片的文件夹
-            if (todayFolder.getPhotos().size() > 0) {
-                folders.add(todayFolder);
-            }
-        }
+        // 获取所有日期并排序（升序：最近的日期在前）
+        List<String> sortedDates = new ArrayList<>(photosByDate.keySet());
+        java.util.Collections.sort(sortedDates); // yyyy-MM-dd 格式可以直接字符串排序
 
-        // 添加其他日期文件夹
-        List<String> dateFolders = dateFolderManager.getAllDateFolders();
-        for (String date : dateFolders) {
-            if (!date.equals(todayDate)) {
-                List<String> photoPaths = dateFolderManager.getPhotosForDate(date);
-                if (!photoPaths.isEmpty()) {
-                    Folder folder = new Folder(date, date);
-                    folder.setDateFolder(true);
-                    for (String photoPath : photoPaths) {
-                        for (Photo photo : allPhotos) {
-                            if (photo.getPath().equals(photoPath)) {
-                                folder.addPhoto(photo);
-                                break;
-                            }
-                        }
-                    }
-                    // 只添加包含有效照片的文件夹
-                    if (folder.getPhotos().size() > 0) {
-                        folders.add(folder);
-                    }
+        // 按照排序后的日期顺序添加文件夹
+        for (String date : sortedDates) {
+            List<Photo> photos = photosByDate.get(date);
+
+            if (photos != null && !photos.isEmpty()) {
+                Folder folder = new Folder(date, date);
+                folder.setDateFolder(true);
+                for (Photo photo : photos) {
+                    folder.addPhoto(photo);
                 }
+                folders.add(folder);
             }
         }
 
@@ -166,32 +136,6 @@ public class MainActivity extends AppCompatActivity {
 
         // 更新应用图标（根据日期文件夹状态）
         iconManager.updateAppIcon();
-    }
-
-    private void cleanupInvalidPhotoPaths(List<Photo> allPhotos) {
-        // 获取所有有效照片的路径
-        List<String> validPhotoPaths = new ArrayList<>();
-        for (Photo photo : allPhotos) {
-            validPhotoPaths.add(photo.getPath());
-        }
-
-        // 遍历所有日期文件夹，删除无效的照片路径
-        List<String> dateFolders = dateFolderManager.getAllDateFolders();
-        for (String date : dateFolders) {
-            List<String> photoPaths = dateFolderManager.getPhotosForDate(date);
-            List<String> invalidPaths = new ArrayList<>();
-
-            for (String photoPath : photoPaths) {
-                if (!validPhotoPaths.contains(photoPath)) {
-                    invalidPaths.add(photoPath);
-                }
-            }
-
-            // 删除无效路径
-            for (String invalidPath : invalidPaths) {
-                dateFolderManager.removePhotoFromDateFolder(invalidPath, date);
-            }
-        }
     }
 
     @Override

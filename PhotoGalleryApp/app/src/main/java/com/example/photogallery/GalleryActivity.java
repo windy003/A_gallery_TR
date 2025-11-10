@@ -53,25 +53,13 @@ public class GalleryActivity extends AppCompatActivity {
 
     private void loadPhotos() {
         photos = new ArrayList<>();
+        PhotoManager photoManager = new PhotoManager(this);
 
         if (isDateFolder) {
-            // 加载日期文件夹中的照片
-            DateFolderManager dateFolderManager = new DateFolderManager(this);
-            List<String> photoPaths = dateFolderManager.getPhotosForDate(folderName);
-            PhotoManager photoManager = new PhotoManager(this);
-            List<Photo> allPhotos = photoManager.getAllPhotos();
-
-            for (String photoPath : photoPaths) {
-                for (Photo photo : allPhotos) {
-                    if (photo.getPath().equals(photoPath)) {
-                        photos.add(photo);
-                        break;
-                    }
-                }
-            }
+            // 加载日期文件夹中的照片（基于DATE_ADDED+3天）
+            photos = photoManager.getPhotosForDate(folderName);
         } else {
             // 加载所有照片
-            PhotoManager photoManager = new PhotoManager(this);
             photos = photoManager.getAllPhotos();
         }
 

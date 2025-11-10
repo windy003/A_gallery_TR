@@ -14,11 +14,11 @@ public class IconManager {
     private static final String COMPLETED_ALIAS = PACKAGE_NAME + ".MainActivityCompleted";
 
     private Context context;
-    private DateFolderManager dateFolderManager;
+    private PhotoManager photoManager;
 
     public IconManager(Context context) {
         this.context = context;
-        this.dateFolderManager = new DateFolderManager(context);
+        this.photoManager = new PhotoManager(context);
     }
 
     /**
@@ -55,19 +55,20 @@ public class IconManager {
 
     /**
      * 检查所有日期文件夹是否都在当天之后
+     * 基于PhotoManager的真实日期分组（DATE_ADDED + 3天）
      */
     private boolean areAllDateFoldersAfterToday() {
-        List<String> dateFolders = dateFolderManager.getAllDateFolders();
+        java.util.Map<String, List<Photo>> photosByDate = photoManager.getPhotosByDisplayDate();
 
         // 如果没有日期文件夹，认为是已完成状态
-        if (dateFolders == null || dateFolders.isEmpty()) {
+        if (photosByDate == null || photosByDate.isEmpty()) {
             return true;
         }
 
         String today = getTodayDateString();
 
         // 检查是否所有日期文件夹都在今天之后
-        for (String dateFolder : dateFolders) {
+        for (String dateFolder : photosByDate.keySet()) {
             if (dateFolder.compareTo(today) <= 0) {
                 // 存在当天或之前的日期文件夹，未完成
                 return false;
