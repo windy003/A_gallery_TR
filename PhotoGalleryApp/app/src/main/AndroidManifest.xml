@@ -15,35 +15,13 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.AppCompat.Light.DarkActionBar">
 
-        <!-- 默认图标 (未完成) -->
-        <activity-alias
-            android:name=".MainActivityDefault"
-            android:targetActivity=".MainActivity"
-            android:enabled="true"
-            android:icon="@drawable/a2048x2048"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
-        <!-- 已完成图标 -->
-        <activity-alias
-            android:name=".MainActivityCompleted"
-            android:targetActivity=".MainActivity"
-            android:enabled="false"
-            android:icon="@drawable/ywc"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-
         <activity
             android:name=".MainActivity"
-            android:exported="false">
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
 
         <activity
@@ -55,6 +33,19 @@
             android:exported="false"
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+        <!-- 桌面小部件 -->
+        <receiver
+            android:name=".CompletedDateWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.photogallery.UPDATE_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
 
     </application>
 

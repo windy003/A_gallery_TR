@@ -1,56 +1,60 @@
 package com.example.photogallery;
 
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 public class IconManager {
-    private static final String PACKAGE_NAME = "com.example.photogallery";
-    private static final String DEFAULT_ALIAS = PACKAGE_NAME + ".MainActivityDefault";
-    private static final String COMPLETED_ALIAS = PACKAGE_NAME + ".MainActivityCompleted";
+    private static final String PREFS_NAME = "IconManagerPrefs";
+    private static final String KEY_COMPLETED_DATE = "completed_date";
+    private static final String KEY_IS_COMPLETED = "is_completed";
 
     private Context context;
     private PhotoManager photoManager;
+    private SharedPreferences prefs;
 
     public IconManager(Context context) {
         this.context = context;
         this.photoManager = new PhotoManager(context);
+        this.prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 
     /**
-     * 检查并更新应用图标
-     * 逻辑：所有日期文件夹都在当天之后 -> 显示已完成图标(ywc.png)
-     *      存在当天或之前的日期文件夹 -> 显示默认图标(a2048x2048.png)
+     * 检查并更新应用状态
+     * 逻辑：所有日期文件夹都在当天之后 -> 已完成状态
+     *      存在当天或之前的日期文件夹 -> 未完成状态
+     * 注意：APP图标不再切换，只更新小部件显示
      */
     public void updateAppIcon() {
         boolean shouldShowCompleted = areAllDateFoldersAfterToday();
-        boolean isCurrentlyCompleted = isCompletedIconEnabled();
+        boolean isCurrentlyCompleted = getCompletedStatus();
 
-        // 只在状态改变时才切换图标，避免频繁切换导致桌面位置变动
+        // 只在状态改变时才更新
         if (shouldShowCompleted && !isCurrentlyCompleted) {
-            enableCompletedIcon();
+            setCompletedStatus(true);
         } else if (!shouldShowCompleted && isCurrentlyCompleted) {
-            enableDefaultIcon();
+            setCompletedStatus(false);
         }
-        // 如果状态没变，不做任何操作
+
+        // 无论状态是否改变，都更新Widget以确保显示正确
+        CompletedDateWidget.updateAllWidgets(context);
     }
 
     /**
-     * 检查当前是否启用了已完成图标
+     * 获取当前完成状态
      */
-    private boolean isCompletedIconEnabled() {
-        PackageManager pm = context.getPackageManager();
-        int completedState = pm.getComponentEnabledSetting(
-            new ComponentName(context, COMPLETED_ALIAS)
-        );
+    private boolean getCompletedStatus() {
+        return prefs.getBoolean(KEY_IS_COMPLETED, false);
+    }
 
-        // COMPONENT_ENABLED_STATE_ENABLED = 1 (显式启用)
-        // COMPONENT_ENABLED_STATE_DEFAULT = 0 (使用manifest默认值，即disabled)
-        return completedState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+    /**
+     * 获取公开的完成状态（供Widget使用）
+     */
+    public boolean isCompleted() {
+        return prefs.getBoolean(KEY_IS_COMPLETED, false);
     }
 
     /**
@@ -80,45 +84,20 @@ public class IconManager {
     }
 
     /**
-     * 启用已完成图标 (ywc.png)
+     * 设置完成状态
+     * @param completed true表示已完成，false表示未完成
      */
-    private void enableCompletedIcon() {
-        PackageManager pm = context.getPackageManager();
+    private void setCompletedStatus(boolean completed) {
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putBoolean(KEY_IS_COMPLETED, completed);
 
-        // 禁用默认图标
-        pm.setComponentEnabledSetting(
-            new ComponentName(context, DEFAULT_ALIAS),
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-            PackageManager.DONT_KILL_APP
-        );
+        if (completed) {
+            // 保存完成日期
+            String currentDate = getShortDateString();
+            editor.putString(KEY_COMPLETED_DATE, currentDate);
+        }
 
-        // 启用已完成图标
-        pm.setComponentEnabledSetting(
-            new ComponentName(context, COMPLETED_ALIAS),
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-            PackageManager.DONT_KILL_APP
-        );
-    }
-
-    /**
-     * 启用默认图标 (a2048x2048.png)
-     */
-    private void enableDefaultIcon() {
-        PackageManager pm = context.getPackageManager();
-
-        // 启用默认图标
-        pm.setComponentEnabledSetting(
-            new ComponentName(context, DEFAULT_ALIAS),
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-            PackageManager.DONT_KILL_APP
-        );
-
-        // 禁用已完成图标
-        pm.setComponentEnabledSetting(
-            new ComponentName(context, COMPLETED_ALIAS),
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-            PackageManager.DONT_KILL_APP
-        );
+        editor.apply();
     }
 
     /**
@@ -127,5 +106,33 @@ public class IconManager {
     private String getTodayDateString() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
         return sdf.format(new Date());
+    }
+
+    /**
+     * 获取简短日期字符串 (格式: yyyy/MM/dd)
+     */
+    private String getShortDateString() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault());
+        return sdf.format(new Date());
+    }
+
+    /**
+     * 获取保存的完成日期
+     * @return 完成日期字符串，如果未设置则返回null
+     */
+    public String getCompletedDate() {
+        return prefs.getString(KEY_COMPLETED_DATE, null);
+    }
+
+    /**
+     * 获取带日期的应用名称（用于显示）
+     * @return 如果有完成日期则返回 "Gallery_TR 日期"，否则返回 "Gallery_TR"
+     */
+    public String getAppNameWithDate() {
+        String completedDate = getCompletedDate();
+        if (completedDate != null && isCompleted()) {
+            return "Gallery_TR " + completedDate;
+        }
+        return "Gallery_TR";
     }
 }
