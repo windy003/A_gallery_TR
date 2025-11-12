@@ -2,12 +2,14 @@ package com.example.photogallery;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
 public class IconManager {
+    private static final String TAG = "IconManager";
     private static final String PREFS_NAME = "IconManagerPrefs";
     private static final String KEY_COMPLETED_DATE = "completed_date";
     private static final String KEY_IS_COMPLETED = "is_completed";
@@ -29,17 +31,26 @@ public class IconManager {
      * 注意：APP图标不再切换，只更新小部件显示
      */
     public void updateAppIcon() {
+        Log.d(TAG, "开始更新应用图标状态");
+
         boolean shouldShowCompleted = areAllDateFoldersAfterToday();
         boolean isCurrentlyCompleted = getCompletedStatus();
 
+        Log.d(TAG, "应该显示已完成: " + shouldShowCompleted + ", 当前状态: " + isCurrentlyCompleted);
+
         // 只在状态改变时才更新
         if (shouldShowCompleted && !isCurrentlyCompleted) {
+            Log.d(TAG, "状态改变: 设置为已完成");
             setCompletedStatus(true);
         } else if (!shouldShowCompleted && isCurrentlyCompleted) {
+            Log.d(TAG, "状态改变: 设置为未完成");
             setCompletedStatus(false);
+        } else {
+            Log.d(TAG, "状态未改变");
         }
 
         // 无论状态是否改变，都更新Widget以确保显示正确
+        Log.d(TAG, "调用更新小部件方法");
         CompletedDateWidget.updateAllWidgets(context);
     }
 
