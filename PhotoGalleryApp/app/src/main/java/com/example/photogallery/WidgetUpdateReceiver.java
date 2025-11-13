@@ -18,29 +18,11 @@ public class WidgetUpdateReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         String action = intent.getAction();
-        Log.d(TAG, "收到广播: " + action);
+        Log.d(TAG, "收到广播: " + action + " (已禁用自动更新)");
 
-        if (ACTION_UPDATE_WIDGET.equals(action)) {
-            // 定时更新小部件
-            Log.d(TAG, "执行定时更新小部件");
-            updateWidget(context);
-            // 重新设置下一次的定时任务（因为小米系统可能清除定时任务）
-            scheduleWidgetUpdate(context);
-        } else if (Intent.ACTION_BOOT_COMPLETED.equals(action)) {
-            // 设备重启后，重新设置定时任务
-            Log.d(TAG, "设备重启，重新设置定时任务");
-            scheduleWidgetUpdate(context);
-            updateWidget(context);
-        } else if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-            // 应用更新后，重新设置定时任务
-            Log.d(TAG, "应用更新，重新设置定时任务");
-            scheduleWidgetUpdate(context);
-            updateWidget(context);
-        } else if (Intent.ACTION_DATE_CHANGED.equals(action)) {
-            // 系统日期改变时更新
-            Log.d(TAG, "日期改变，更新小部件");
-            updateWidget(context);
-        }
+        // 已禁用所有自动更新逻辑
+        // 小部件只在用户打开app时才更新状态
+        // 这样可以避免在app不能常驻后台的手机上出现状态不一致的问题
     }
 
     /**

@@ -53,9 +53,6 @@ public class MainActivity extends AppCompatActivity {
         } else {
             requestPermissions();
         }
-
-        // 启动小部件定时更新任务
-        WidgetUpdateReceiver.scheduleWidgetUpdate(this);
     }
 
     private boolean checkPermissions() {
