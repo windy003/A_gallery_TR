@@ -7,10 +7,6 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
-    <!-- 小部件定时更新所需权限 -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
@@ -56,22 +52,6 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_info" />
-        </receiver>
-
-        <!-- 小部件定时更新接收器 -->
-        <receiver
-            android:name=".WidgetUpdateReceiver"
-            android:exported="true">
-            <intent-filter>
-                <!-- 设备重启 -->
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <!-- 应用更新 -->
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <!-- 日期改变 -->
-                <action android:name="android.intent.action.DATE_CHANGED" />
-                <!-- 自定义定时更新 -->
-                <action android:name="com.example.photogallery.ACTION_UPDATE_WIDGET" />
-            </intent-filter>
         </receiver>
 
     </application>
