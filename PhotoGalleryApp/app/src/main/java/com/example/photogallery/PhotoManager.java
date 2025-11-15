@@ -25,7 +25,7 @@ public class PhotoManager {
     /**
      * 从MediaStore获取所有图片
      */
-    public List<Photo> getAllPhotos() {
+    private List<Photo> getImages() {
         List<Photo> photos = new ArrayList<>();
         Uri uri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
         String[] projection = {
@@ -59,7 +59,7 @@ public class PhotoManager {
                 long dateAdded = cursor.getLong(dateColumn);
                 long size = cursor.getLong(sizeColumn);
 
-                Photo photo = new Photo(id, path, name, dateAdded, size);
+                Photo photo = new Photo(id, path, name, dateAdded, size, Photo.TYPE_IMAGE, 0);
                 photo.setUri(Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, String.valueOf(id)));
                 photos.add(photo);
             }
@@ -67,6 +67,70 @@ public class PhotoManager {
         }
 
         return photos;
+    }
+
+    /**
+     * 从MediaStore获取所有视频
+     */
+    private List<Photo> getVideos() {
+        List<Photo> videos = new ArrayList<>();
+        Uri uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+        String[] projection = {
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DATA,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DATE_ADDED,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.DURATION
+        };
+
+        ContentResolver contentResolver = context.getContentResolver();
+        Cursor cursor = contentResolver.query(
+                uri,
+                projection,
+                null,
+                null,
+                MediaStore.Video.Media.DATE_ADDED + " DESC"
+        );
+
+        if (cursor != null) {
+            int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID);
+            int pathColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA);
+            int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME);
+            int dateColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED);
+            int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE);
+            int durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION);
+
+            while (cursor.moveToNext()) {
+                long id = cursor.getLong(idColumn);
+                String path = cursor.getString(pathColumn);
+                String name = cursor.getString(nameColumn);
+                long dateAdded = cursor.getLong(dateColumn);
+                long size = cursor.getLong(sizeColumn);
+                long duration = cursor.getLong(durationColumn);
+
+                Photo video = new Photo(id, path, name, dateAdded, size, Photo.TYPE_VIDEO, duration);
+                video.setUri(Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, String.valueOf(id)));
+                videos.add(video);
+            }
+            cursor.close();
+        }
+
+        return videos;
+    }
+
+    /**
+     * 获取所有媒体文件（图片+视频）
+     */
+    public List<Photo> getAllPhotos() {
+        List<Photo> allMedia = new ArrayList<>();
+        allMedia.addAll(getImages());
+        allMedia.addAll(getVideos());
+
+        // 按日期排序（最新的在前）
+        allMedia.sort((p1, p2) -> Long.compare(p2.getDateAdded(), p1.getDateAdded()));
+
+        return allMedia;
     }
 
     /**

@@ -38,10 +38,35 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
     public void onBindViewHolder(@NonNull PhotoViewHolder holder, int position) {
         Photo photo = photos.get(position);
 
-        Glide.with(context)
-                .load(new File(photo.getPath()))
-                .centerCrop()
-                .into(holder.imageViewPhoto);
+        // 加载缩略图
+        if (photo.isVideo()) {
+            // 视频：加载视频缩略图
+            Glide.with(context)
+                    .load(photo.getUri())
+                    .centerCrop()
+                    .into(holder.imageViewPhoto);
+
+            // 显示播放图标
+            holder.imageViewPlayIcon.setVisibility(View.VISIBLE);
+
+            // 显示视频时长
+            if (photo.getDuration() > 0) {
+                holder.textViewDuration.setText(formatDuration(photo.getDuration()));
+                holder.textViewDuration.setVisibility(View.VISIBLE);
+            } else {
+                holder.textViewDuration.setVisibility(View.GONE);
+            }
+        } else {
+            // 图片
+            Glide.with(context)
+                    .load(new File(photo.getPath()))
+                    .centerCrop()
+                    .into(holder.imageViewPhoto);
+
+            // 隐藏视频相关元素
+            holder.imageViewPlayIcon.setVisibility(View.GONE);
+            holder.textViewDuration.setVisibility(View.GONE);
+        }
 
         // 隐藏日期标签（现在完全基于真实创建时间归类，不需要显示）
         holder.textViewAdded.setVisibility(View.GONE);
@@ -53,6 +78,13 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
         });
     }
 
+    private String formatDuration(long milliseconds) {
+        int seconds = (int) (milliseconds / 1000);
+        int minutes = seconds / 60;
+        seconds = seconds % 60;
+        return String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds);
+    }
+
     @Override
     public int getItemCount() {
         return photos.size();
@@ -60,12 +92,16 @@ public class PhotoAdapter extends RecyclerView.Adapter<PhotoAdapter.PhotoViewHol
 
     static class PhotoViewHolder extends RecyclerView.ViewHolder {
         ImageView imageViewPhoto;
+        ImageView imageViewPlayIcon;
         TextView textViewAdded;
+        TextView textViewDuration;
 
         public PhotoViewHolder(@NonNull View itemView) {
             super(itemView);
             imageViewPhoto = itemView.findViewById(R.id.imageViewPhoto);
+            imageViewPlayIcon = itemView.findViewById(R.id.imageViewPlayIcon);
             textViewAdded = itemView.findViewById(R.id.textViewAdded);
+            textViewDuration = itemView.findViewById(R.id.textViewDuration);
         }
     }
 }

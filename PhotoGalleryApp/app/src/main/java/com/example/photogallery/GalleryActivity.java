@@ -18,6 +18,7 @@ public class GalleryActivity extends AppCompatActivity {
     private String folderDisplayName;
     private boolean isDateFolder;
     private ActivityResultLauncher<Intent> imageViewerLauncher;
+    private ActivityResultLauncher<Intent> videoPlayerLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,6 +31,17 @@ public class GalleryActivity extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == RESULT_OK) {
                         // ImageViewerActivity返回OK，说明有变化，传递给MainActivity
+                        setResult(RESULT_OK);
+                        loadPhotos(); // 刷新当前列表
+                    }
+                }
+        );
+
+        // 注册VideoPlayerActivity的结果监听器
+        videoPlayerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
                         setResult(RESULT_OK);
                         loadPhotos(); // 刷新当前列表
                     }
@@ -64,12 +76,48 @@ public class GalleryActivity extends AppCompatActivity {
         }
 
         photoAdapter = new PhotoAdapter(this, photos, position -> {
-            Intent intent = new Intent(GalleryActivity.this, ImageViewerActivity.class);
-            intent.putExtra("photos", (ArrayList<Photo>) photos);
-            intent.putExtra("position", position);
-            intent.putExtra("folder_name", folderName);
-            intent.putExtra("is_date_folder", isDateFolder);
-            imageViewerLauncher.launch(intent);
+            Photo clickedPhoto = photos.get(position);
+
+            if (clickedPhoto.isVideo()) {
+                // 打开视频播放器
+                // 只传递视频列表
+                ArrayList<Photo> videos = new ArrayList<>();
+                int videoPosition = 0;
+                for (int i = 0; i < photos.size(); i++) {
+                    if (photos.get(i).isVideo()) {
+                        if (i == position) {
+                            videoPosition = videos.size();
+                        }
+                        videos.add(photos.get(i));
+                    }
+                }
+
+                Intent intent = new Intent(GalleryActivity.this, VideoPlayerActivity.class);
+                intent.putExtra("videos", videos);
+                intent.putExtra("position", videoPosition);
+                intent.putExtra("folderName", folderName);
+                videoPlayerLauncher.launch(intent);
+            } else {
+                // 打开图片查看器
+                // 只传递图片列表
+                ArrayList<Photo> images = new ArrayList<>();
+                int imagePosition = 0;
+                for (int i = 0; i < photos.size(); i++) {
+                    if (!photos.get(i).isVideo()) {
+                        if (i == position) {
+                            imagePosition = images.size();
+                        }
+                        images.add(photos.get(i));
+                    }
+                }
+
+                Intent intent = new Intent(GalleryActivity.this, ImageViewerActivity.class);
+                intent.putExtra("photos", images);
+                intent.putExtra("position", imagePosition);
+                intent.putExtra("folder_name", folderName);
+                intent.putExtra("is_date_folder", isDateFolder);
+                imageViewerLauncher.launch(intent);
+            }
         });
 
         recyclerViewPhotos.setAdapter(photoAdapter);

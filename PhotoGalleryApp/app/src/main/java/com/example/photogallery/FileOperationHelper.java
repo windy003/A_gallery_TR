@@ -155,8 +155,149 @@ public class FileOperationHelper {
                 return "image/webp";
             case "heic":
                 return "image/heic";
+            case "mp4":
+                return "video/mp4";
+            case "3gp":
+                return "video/3gpp";
+            case "mkv":
+                return "video/x-matroska";
+            case "webm":
+                return "video/webm";
+            case "avi":
+                return "video/x-msvideo";
             default:
                 return "image/jpeg";
+        }
+    }
+
+    /**
+     * 复制视频文件到MediaStore（创建新的副本）
+     * 新文件会有新的DATE_ADDED（当前时间）
+     *
+     * @param sourceUri 源视频URI
+     * @param fileName 文件名
+     * @return 新视频的ID，失败返回-1
+     */
+    public long copyVideoFile(Uri sourceUri, String fileName) {
+        try {
+            // 准备新文件的元数据
+            ContentValues values = new ContentValues();
+
+            values.put(MediaStore.Video.Media.DISPLAY_NAME, fileName);
+            values.put(MediaStore.Video.Media.MIME_TYPE, getMimeType(fileName));
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ 使用相对路径
+                values.put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/");
+                values.put(MediaStore.Video.Media.IS_PENDING, 1);
+            }
+
+            ContentResolver resolver = context.getContentResolver();
+            Uri collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
+
+            // 创建新的MediaStore条目
+            Uri newVideoUri = resolver.insert(collection, values);
+
+            if (newVideoUri == null) {
+                Log.e(TAG, "Failed to create new MediaStore entry for video");
+                return -1;
+            }
+
+            // 复制文件内容
+            try (OutputStream out = resolver.openOutputStream(newVideoUri);
+                 InputStream in = resolver.openInputStream(sourceUri)) {
+
+                if (out == null || in == null) {
+                    Log.e(TAG, "Failed to open streams for video copy");
+                    resolver.delete(newVideoUri, null, null);
+                    return -1;
+                }
+
+                // 复制数据
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+
+                out.flush();
+            }
+
+            // Android 10+ 需要更新IS_PENDING状态
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.clear();
+                values.put(MediaStore.Video.Media.IS_PENDING, 0);
+                resolver.update(newVideoUri, values, null, null);
+            }
+
+            // 获取新视频的ID
+            long newVideoId = ContentUris.parseId(newVideoUri);
+            Log.d(TAG, "Successfully copied video. New ID: " + newVideoId);
+
+            return newVideoId;
+
+        } catch (IOException e) {
+            Log.e(TAG, "Error copying video file", e);
+            return -1;
+        }
+    }
+
+    /**
+     * 删除视频文件
+     *
+     * @param videoUri 视频URI
+     * @param videoId 视频ID
+     * @param launcher ActivityResultLauncher用于权限请求
+     * @param onSuccess 成功回调
+     */
+    public void deleteVideo(Uri videoUri, long videoId,
+                           androidx.activity.result.ActivityResultLauncher<androidx.activity.result.IntentSenderRequest> launcher,
+                           Runnable onSuccess) {
+        ContentResolver resolver = context.getContentResolver();
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Android 11+: 需要请求用户权限
+                try {
+                    int deletedRows = resolver.delete(videoUri, null, null);
+                    if (deletedRows > 0) {
+                        onSuccess.run();
+                    }
+                } catch (SecurityException e) {
+                    // 需要用户授权
+                    android.app.PendingIntent pendingIntent =
+                        MediaStore.createDeleteRequest(resolver,
+                            java.util.Collections.singletonList(videoUri));
+                    androidx.activity.result.IntentSenderRequest request =
+                        new androidx.activity.result.IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build();
+                    launcher.launch(request);
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10: RecoverableSecurityException
+                try {
+                    int deletedRows = resolver.delete(videoUri, null, null);
+                    if (deletedRows > 0) {
+                        onSuccess.run();
+                    }
+                } catch (SecurityException e) {
+                    if (e instanceof android.app.RecoverableSecurityException) {
+                        android.app.RecoverableSecurityException recoverableException =
+                            (android.app.RecoverableSecurityException) e;
+                        androidx.activity.result.IntentSenderRequest request =
+                            new androidx.activity.result.IntentSenderRequest.Builder(
+                                recoverableException.getUserAction().getActionIntent().getIntentSender()).build();
+                        launcher.launch(request);
+                    }
+                }
+            } else {
+                // Android 9及以下：直接删除
+                int deletedRows = resolver.delete(videoUri, null, null);
+                if (deletedRows > 0) {
+                    onSuccess.run();
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error deleting video", e);
         }
     }
 
