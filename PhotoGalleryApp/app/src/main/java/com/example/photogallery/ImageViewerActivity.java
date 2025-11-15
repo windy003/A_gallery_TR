@@ -131,26 +131,17 @@ public class ImageViewerActivity extends AppCompatActivity {
                     return;
                 }
 
-                // 第二步：删除旧文件
-                fileOperationHelper.deleteImage(currentPhoto.getId(), new FileOperationHelper.DeleteCallback() {
+                // 第二步：使用软删除（移到回收站），避免系统权限对话框
+                recycleBinManager.moveToRecycleBin(currentPhoto, new RecycleBinManager.Callback() {
                     @Override
-                    public void onDeleteSuccess() {
-                        // 删除成功，完成延迟操作
+                    public void onSuccess() {
                         performDelayCleanup();
                     }
 
                     @Override
-                    public void onDeleteNeedPermission(PendingIntent pendingIntent) {
-                        // 需要用户授权删除
-                        IntentSenderRequest request = new IntentSenderRequest.Builder(
-                                pendingIntent.getIntentSender()).build();
-                        delayDeleteRequestLauncher.launch(request);
-                    }
-
-                    @Override
-                    public void onDeleteFailed(String error) {
+                    public void onError(String error) {
                         Toast.makeText(ImageViewerActivity.this,
-                                "删除旧文件失败: " + error, Toast.LENGTH_SHORT).show();
+                                "移除旧文件失败: " + error, Toast.LENGTH_SHORT).show();
                     }
                 });
             });

@@ -286,25 +286,34 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private void addToThreeDaysLater() {
         Photo currentVideo = videos.get(currentPosition);
 
-        new AlertDialog.Builder(this)
-                .setTitle("确认")
-                .setMessage("将此视频添加到3天后？")
-                .setPositiveButton("确定", (dialog, which) -> {
-                    FileOperationHelper helper = new FileOperationHelper(this);
+        Toast.makeText(this, "正在复制文件...", Toast.LENGTH_SHORT).show();
 
-                    // 复制视频文件
-                    long newId = helper.copyVideoFile(currentVideo.getUri(), currentVideo.getName());
+        new Thread(() -> {
+            FileOperationHelper helper = new FileOperationHelper(this);
 
-                    if (newId != -1) {
-                        // 删除原视频
-                        helper.deleteVideo(currentVideo.getUri(), currentVideo.getId(),
-                                deleteRequestLauncher, () -> performDelayCleanup());
-                    } else {
-                        Toast.makeText(this, "操作失败", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNegativeButton("取消", null)
-                .show();
+            // 复制视频文件
+            long newId = helper.copyVideoFile(currentVideo.getUri(), currentVideo.getName());
+
+            runOnUiThread(() -> {
+                if (newId != -1) {
+                    // 使用软删除（移到回收站），避免系统权限对话框
+                    recycleBinManager.moveToRecycleBin(currentVideo, new RecycleBinManager.Callback() {
+                        @Override
+                        public void onSuccess() {
+                            performDelayCleanup();
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Toast.makeText(VideoPlayerActivity.this,
+                                    "移除旧文件失败: " + error, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else {
+                    Toast.makeText(VideoPlayerActivity.this, "复制文件失败", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }).start();
     }
 
     private void deleteCurrentVideo() {
