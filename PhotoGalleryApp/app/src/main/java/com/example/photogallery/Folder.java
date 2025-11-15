@@ -32,6 +32,10 @@ public class Folder {
         return displayName;
     }
 
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
     public List<Photo> getPhotos() {
         return photos;
     }

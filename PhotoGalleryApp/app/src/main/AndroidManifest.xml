@@ -41,6 +41,17 @@
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
 
+        <activity
+            android:name=".RecycleBinActivity"
+            android:exported="false"
+            android:label="回收站" />
+
+        <activity
+            android:name=".RecycleBinViewerActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
         <!-- 桌面小部件 -->
         <receiver
             android:name=".CompletedDateWidget"

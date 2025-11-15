@@ -42,6 +42,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private boolean controlsVisible = true;
 
     private ActivityResultLauncher<IntentSenderRequest> deleteRequestLauncher;
+    private RecycleBinManager recycleBinManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,6 +78,9 @@ public class VideoPlayerActivity extends AppCompatActivity {
                     }
                 }
         );
+
+        // 初始化回收站管理器
+        recycleBinManager = new RecycleBinManager(this);
 
         // 设置按钮监听器
         buttonPlayPause.setOnClickListener(v -> togglePlayPause());
@@ -308,11 +312,21 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
         new AlertDialog.Builder(this)
                 .setTitle("确认删除")
-                .setMessage("确定要删除这个视频吗？")
+                .setMessage("确定要将此视频移至回收站吗？\n24小时后自动永久删除")
                 .setPositiveButton("删除", (dialog, which) -> {
-                    FileOperationHelper helper = new FileOperationHelper(this);
-                    helper.deleteVideo(currentVideo.getUri(), currentVideo.getId(),
-                            deleteRequestLauncher, this::performDeleteCleanup);
+                    // 使用软删除：移动到回收站
+                    recycleBinManager.moveToRecycleBin(currentVideo, new RecycleBinManager.Callback() {
+                        @Override
+                        public void onSuccess() {
+                            performDeleteCleanup();
+                            Toast.makeText(VideoPlayerActivity.this, "已移至回收站，24小时后自动删除", Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Toast.makeText(VideoPlayerActivity.this, "移至回收站失败: " + error, Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 })
                 .setNegativeButton("取消", null)
                 .show();

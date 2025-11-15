@@ -36,6 +36,7 @@ public class ImageViewerActivity extends AppCompatActivity {
     private boolean isDateFolder;
     private FileOperationHelper fileOperationHelper;
     private Photo photoToDelay; // 临时存储待延迟的图片
+    private RecycleBinManager recycleBinManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,6 +81,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         isDateFolder = getIntent().getBooleanExtra("is_date_folder", false);
 
         fileOperationHelper = new FileOperationHelper(this);
+        recycleBinManager = new RecycleBinManager(this);
 
         setupViewPager();
         setupControls();
@@ -201,49 +203,19 @@ public class ImageViewerActivity extends AppCompatActivity {
         if (currentPosition < photos.size()) {
             Photo photoToDelete = photos.get(currentPosition);
 
-            try {
-                // 重新构建 URI（因为 Uri 是 transient 的，序列化后会丢失）
-                Uri photoUri = android.content.ContentUris.withAppendedId(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    photoToDelete.getId()
-                );
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    // Android 11+ (API 30+): 使用 createDeleteRequest
-                    List<Uri> urisToDelete = Collections.singletonList(photoUri);
-                    PendingIntent pendingIntent = MediaStore.createDeleteRequest(getContentResolver(), urisToDelete);
-
-                    IntentSenderRequest request = new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build();
-                    deleteRequestLauncher.launch(request);
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    // Android 10 (API 29): 使用 RecoverableSecurityException
-                    try {
-                        int deletedRows = getContentResolver().delete(photoUri, null, null);
-                        if (deletedRows > 0) {
-                            performDeleteCleanup();
-                        } else {
-                            Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
-                        }
-                    } catch (RecoverableSecurityException e) {
-                        // 需要用户授权
-                        IntentSenderRequest request = new IntentSenderRequest.Builder(
-                            e.getUserAction().getActionIntent().getIntentSender()
-                        ).build();
-                        deleteRequestLauncher.launch(request);
-                    }
-                } else {
-                    // Android 9 及以下：直接删除
-                    int deletedRows = getContentResolver().delete(photoUri, null, null);
-                    if (deletedRows > 0) {
-                        performDeleteCleanup();
-                    } else {
-                        Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
-                    }
+            // 使用软删除：移动到回收站
+            recycleBinManager.moveToRecycleBin(photoToDelete, new RecycleBinManager.Callback() {
+                @Override
+                public void onSuccess() {
+                    performDeleteCleanup();
+                    Toast.makeText(ImageViewerActivity.this, "已移至回收站，24小时后自动删除", Toast.LENGTH_SHORT).show();
                 }
-            } catch (Exception e) {
-                Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                e.printStackTrace();
-            }
+
+                @Override
+                public void onError(String error) {
+                    Toast.makeText(ImageViewerActivity.this, "移至回收站失败: " + error, Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 
@@ -255,7 +227,6 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         // 如果删除后列表为空，关闭Activity
         if (photos.isEmpty()) {
-            Toast.makeText(this, "照片已删除", Toast.LENGTH_SHORT).show();
             setResult(RESULT_OK);
             finish();
             return;
@@ -268,7 +239,9 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         // 更新页面信息
         updatePageInfo();
-        Toast.makeText(this, "照片已删除", Toast.LENGTH_SHORT).show();
+
+        // 设置result，通知上级Activity刷新
+        setResult(RESULT_OK);
     }
 
     @Override

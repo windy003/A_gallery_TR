@@ -25,6 +25,8 @@ public class MainActivity extends AppCompatActivity {
     private PhotoManager photoManager;
     private IconManager iconManager;
     private ActivityResultLauncher<Intent> galleryLauncher;
+    private ActivityResultLauncher<Intent> recycleBinLauncher;
+    private RecycleBinManager recycleBinManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,13 +44,27 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
 
+        // 注册RecycleBinActivity的结果监听器
+        recycleBinLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        // 回收站有变化，刷新文件夹列表
+                        loadFolders();
+                    }
+                }
+        );
+
         recyclerViewFolders = findViewById(R.id.recyclerViewFolders);
         recyclerViewFolders.setLayoutManager(new LinearLayoutManager(this));
 
         photoManager = new PhotoManager(this);
         iconManager = new IconManager(this);
+        recycleBinManager = new RecycleBinManager(this);
 
         if (checkPermissions()) {
+            // 清理过期的回收站项目
+            cleanupExpiredItems();
             loadFolders();
         } else {
             requestPermissions();
@@ -86,11 +102,29 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                cleanupExpiredItems();
                 loadFolders();
             } else {
                 Toast.makeText(this, "需要存储权限才能查看照片", Toast.LENGTH_LONG).show();
             }
         }
+    }
+
+    /**
+     * 清理过期的回收站项目（超过24小时的）
+     */
+    private void cleanupExpiredItems() {
+        recycleBinManager.cleanupExpiredItems(new RecycleBinManager.Callback() {
+            @Override
+            public void onSuccess() {
+                // 清理完成，无需额外操作
+            }
+
+            @Override
+            public void onError(String error) {
+                // 清理失败，忽略错误
+            }
+        });
     }
 
     private void loadFolders() {
@@ -105,6 +139,10 @@ public class MainActivity extends AppCompatActivity {
             allPhotosFolder.addPhoto(photo);
         }
         folders.add(allPhotosFolder);
+
+        // 添加"回收站"文件夹
+        Folder recycleBinFolder = new Folder("recycle_bin", "回收站");
+        folders.add(recycleBinFolder);
 
         // 使用PhotoManager的新方法：根据DATE_ADDED+3天自动分组
         java.util.Map<String, List<Photo>> photosByDate = photoManager.getPhotosByDisplayDate();
@@ -128,17 +166,42 @@ public class MainActivity extends AppCompatActivity {
         }
 
         folderAdapter = new FolderAdapter(this, folders, folder -> {
-            Intent intent = new Intent(MainActivity.this, GalleryActivity.class);
-            intent.putExtra("folder_name", folder.getName());
-            intent.putExtra("folder_display_name", folder.getDisplayName());
-            intent.putExtra("is_date_folder", folder.isDateFolder());
-            galleryLauncher.launch(intent);
+            if ("recycle_bin".equals(folder.getName())) {
+                // 打开回收站Activity
+                Intent intent = new Intent(MainActivity.this, RecycleBinActivity.class);
+                recycleBinLauncher.launch(intent);
+            } else {
+                Intent intent = new Intent(MainActivity.this, GalleryActivity.class);
+                intent.putExtra("folder_name", folder.getName());
+                intent.putExtra("folder_display_name", folder.getDisplayName());
+                intent.putExtra("is_date_folder", folder.isDateFolder());
+                galleryLauncher.launch(intent);
+            }
         });
 
         recyclerViewFolders.setAdapter(folderAdapter);
 
+        // 异步更新回收站计数
+        updateRecycleBinCount();
+
         // 更新应用图标（根据日期文件夹状态）
         iconManager.updateAppIcon();
+    }
+
+    /**
+     * 更新回收站文件夹的项目计数
+     */
+    private void updateRecycleBinCount() {
+        recycleBinManager.getDeletedCount(count -> {
+            // 查找回收站文件夹并更新显示名称
+            for (Folder folder : folders) {
+                if ("recycle_bin".equals(folder.getName())) {
+                    folder.setDisplayName("回收站 (" + count + ")");
+                    folderAdapter.notifyDataSetChanged();
+                    break;
+                }
+            }
+        });
     }
 
     @Override
