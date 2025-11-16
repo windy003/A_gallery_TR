@@ -2,6 +2,8 @@ package com.example.photogallery;
 
 import android.app.PendingIntent;
 import android.app.RecoverableSecurityException;
+import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager2.widget.ViewPager2;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 
 public class ImageViewerActivity extends AppCompatActivity {
@@ -29,6 +32,7 @@ public class ImageViewerActivity extends AppCompatActivity {
     private View dragHandle;
     private Button buttonAddToThreeDaysLater;
     private Button buttonDelete;
+    private Button buttonUndo;
     private TextView textViewPageInfo;
     private List<Photo> photos;
     private int currentPosition;
@@ -40,10 +44,15 @@ public class ImageViewerActivity extends AppCompatActivity {
     private boolean isDateFolder;
     private FileOperationHelper fileOperationHelper;
     private Photo photoToDelay; // 临时存储待延迟的图片
+    private int positionToDelay; // 临时存储待延迟的位置
     private RecycleBinManager recycleBinManager;
 
     // 悬浮按钮拖动相关变量
     private float dX, dY;
+
+    // 撤销相关变量
+    private LinkedList<UndoAction> undoStack = new LinkedList<>();
+    private static final int MAX_UNDO_COUNT = 5;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +91,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         dragHandle = findViewById(R.id.dragHandle);
         buttonAddToThreeDaysLater = findViewById(R.id.buttonAddToThreeDaysLater);
         buttonDelete = findViewById(R.id.buttonDelete);
+        buttonUndo = findViewById(R.id.buttonUndo);
         textViewPageInfo = findViewById(R.id.textViewPageInfo);
 
         photos = (ArrayList<Photo>) getIntent().getSerializableExtra("photos");
@@ -119,6 +129,8 @@ public class ImageViewerActivity extends AppCompatActivity {
     private void setupControls() {
         buttonAddToThreeDaysLater.setOnClickListener(v -> addToThreeDaysLater());
         buttonDelete.setOnClickListener(v -> deleteCurrentPhoto());
+        buttonUndo.setOnClickListener(v -> performUndo());
+        updateUndoButton();
     }
 
     private void setupFloatingButtonsDrag() {
@@ -164,6 +176,7 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         Photo currentPhoto = photos.get(currentPosition);
         photoToDelay = currentPhoto; // 保存引用，供删除回调使用
+        positionToDelay = currentPosition; // 保存位置，供撤销使用
 
         Toast.makeText(this, "正在复制文件...", Toast.LENGTH_SHORT).show();
 
@@ -181,6 +194,8 @@ public class ImageViewerActivity extends AppCompatActivity {
                 recycleBinManager.moveToRecycleBin(currentPhoto, new RecycleBinManager.Callback() {
                     @Override
                     public void onSuccess() {
+                        // 记录撤销操作
+                        addUndoAction(UndoAction.createDelayAction(photoToDelay, positionToDelay, newPhotoId));
                         performDelayCleanup();
                     }
 
@@ -241,11 +256,14 @@ public class ImageViewerActivity extends AppCompatActivity {
     private void deleteCurrentPhoto() {
         if (currentPosition < photos.size()) {
             Photo photoToDelete = photos.get(currentPosition);
+            int positionToDelete = currentPosition;
 
             // 使用软删除：移动到回收站
             recycleBinManager.moveToRecycleBin(photoToDelete, new RecycleBinManager.Callback() {
                 @Override
                 public void onSuccess() {
+                    // 记录撤销操作
+                    addUndoAction(UndoAction.createDeleteAction(photoToDelete, positionToDelete));
                     performDeleteCleanup();
                     Toast.makeText(ImageViewerActivity.this, "已移至回收站，24小时后自动删除", Toast.LENGTH_SHORT).show();
                 }
@@ -281,6 +299,186 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         // 设置result，通知上级Activity刷新
         setResult(RESULT_OK);
+    }
+
+    /**
+     * 添加撤销操作到栈中
+     */
+    private void addUndoAction(UndoAction action) {
+        undoStack.addFirst(action);
+        // 保持栈大小不超过最大值
+        while (undoStack.size() > MAX_UNDO_COUNT) {
+            undoStack.removeLast();
+        }
+        updateUndoButton();
+    }
+
+    /**
+     * 更新撤销按钮状态
+     */
+    private void updateUndoButton() {
+        if (undoStack.isEmpty()) {
+            buttonUndo.setEnabled(false);
+            buttonUndo.setText("撤销");
+        } else {
+            buttonUndo.setEnabled(true);
+            buttonUndo.setText("撤销(" + undoStack.size() + ")");
+        }
+    }
+
+    /**
+     * 执行撤销操作
+     */
+    private void performUndo() {
+        if (undoStack.isEmpty()) {
+            Toast.makeText(this, "没有可撤销的操作", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        UndoAction action = undoStack.removeFirst();
+
+        if (action.getActionType() == UndoAction.TYPE_DELETE) {
+            undoDelete(action);
+        } else if (action.getActionType() == UndoAction.TYPE_DELAY) {
+            undoDelay(action);
+        }
+    }
+
+    /**
+     * 撤销删除操作
+     */
+    private void undoDelete(UndoAction action) {
+        Photo photo = action.getOriginalPhoto();
+
+        // 创建DeletedPhoto对象用于从回收站恢复
+        DeletedPhoto deletedPhoto = DeletedPhoto.fromPhoto(photo);
+
+        recycleBinManager.restoreFromRecycleBin(deletedPhoto, new RecycleBinManager.Callback() {
+            @Override
+            public void onSuccess() {
+                // 将照片恢复到列表中
+                int position = Math.min(action.getOriginalPosition(), photos.size());
+                photos.add(position, photo);
+                adapter.notifyItemInserted(position);
+
+                // 更新当前位置
+                if (position <= currentPosition) {
+                    currentPosition = position;
+                    viewPager.setCurrentItem(currentPosition, false);
+                }
+
+                updatePageInfo();
+                updateUndoButton();
+                setResult(RESULT_OK);
+
+                Toast.makeText(ImageViewerActivity.this,
+                    "已撤销删除: " + photo.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onError(String error) {
+                // 恢复失败，将操作放回栈中
+                undoStack.addFirst(action);
+                updateUndoButton();
+                Toast.makeText(ImageViewerActivity.this,
+                    "撤销失败: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * 撤销移到3天后操作
+     */
+    private void undoDelay(UndoAction action) {
+        Photo originalPhoto = action.getOriginalPhoto();
+        long newPhotoId = action.getNewPhotoId();
+
+        Toast.makeText(this, "正在撤销...", Toast.LENGTH_SHORT).show();
+
+        // 第一步：删除新创建的副本
+        new Thread(() -> {
+            Uri newPhotoUri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    newPhotoId
+            );
+
+            ContentResolver resolver = getContentResolver();
+            try {
+                int deletedRows = resolver.delete(newPhotoUri, null, null);
+
+                runOnUiThread(() -> {
+                    if (deletedRows > 0 || true) { // 即使删除失败也继续恢复原文件
+                        // 第二步：从回收站恢复原文件
+                        DeletedPhoto deletedPhoto = DeletedPhoto.fromPhoto(originalPhoto);
+
+                        recycleBinManager.restoreFromRecycleBin(deletedPhoto, new RecycleBinManager.Callback() {
+                            @Override
+                            public void onSuccess() {
+                                // 将照片恢复到列表中
+                                int position = Math.min(action.getOriginalPosition(), photos.size());
+                                photos.add(position, originalPhoto);
+                                adapter.notifyItemInserted(position);
+
+                                // 更新当前位置
+                                if (position <= currentPosition) {
+                                    currentPosition = position;
+                                    viewPager.setCurrentItem(currentPosition, false);
+                                }
+
+                                updatePageInfo();
+                                updateUndoButton();
+                                setResult(RESULT_OK);
+
+                                Toast.makeText(ImageViewerActivity.this,
+                                    "已撤销移到3天后: " + originalPhoto.getName(), Toast.LENGTH_SHORT).show();
+                            }
+
+                            @Override
+                            public void onError(String error) {
+                                // 恢复失败，将操作放回栈中
+                                undoStack.addFirst(action);
+                                updateUndoButton();
+                                Toast.makeText(ImageViewerActivity.this,
+                                    "撤销失败: " + error, Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    // 即使删除新文件失败，也尝试恢复原文件
+                    DeletedPhoto deletedPhoto = DeletedPhoto.fromPhoto(originalPhoto);
+                    recycleBinManager.restoreFromRecycleBin(deletedPhoto, new RecycleBinManager.Callback() {
+                        @Override
+                        public void onSuccess() {
+                            int position = Math.min(action.getOriginalPosition(), photos.size());
+                            photos.add(position, originalPhoto);
+                            adapter.notifyItemInserted(position);
+
+                            if (position <= currentPosition) {
+                                currentPosition = position;
+                                viewPager.setCurrentItem(currentPosition, false);
+                            }
+
+                            updatePageInfo();
+                            updateUndoButton();
+                            setResult(RESULT_OK);
+
+                            Toast.makeText(ImageViewerActivity.this,
+                                "已撤销移到3天后(部分): " + originalPhoto.getName(), Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            undoStack.addFirst(action);
+                            updateUndoButton();
+                            Toast.makeText(ImageViewerActivity.this,
+                                "撤销失败: " + error, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                });
+            }
+        }).start();
     }
 
     @Override
