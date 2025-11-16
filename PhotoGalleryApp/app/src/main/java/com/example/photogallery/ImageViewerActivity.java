@@ -6,9 +6,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
@@ -23,6 +25,8 @@ import java.util.List;
 public class ImageViewerActivity extends AppCompatActivity {
     private ViewPager2 viewPager;
     private LinearLayout layoutControls;
+    private LinearLayout layoutFloatingButtons;
+    private View dragHandle;
     private Button buttonAddToThreeDaysLater;
     private Button buttonDelete;
     private TextView textViewPageInfo;
@@ -37,6 +41,9 @@ public class ImageViewerActivity extends AppCompatActivity {
     private FileOperationHelper fileOperationHelper;
     private Photo photoToDelay; // 临时存储待延迟的图片
     private RecycleBinManager recycleBinManager;
+
+    // 悬浮按钮拖动相关变量
+    private float dX, dY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,6 +78,8 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         viewPager = findViewById(R.id.viewPager);
         layoutControls = findViewById(R.id.layoutControls);
+        layoutFloatingButtons = findViewById(R.id.layoutFloatingButtons);
+        dragHandle = findViewById(R.id.dragHandle);
         buttonAddToThreeDaysLater = findViewById(R.id.buttonAddToThreeDaysLater);
         buttonDelete = findViewById(R.id.buttonDelete);
         textViewPageInfo = findViewById(R.id.textViewPageInfo);
@@ -85,6 +94,7 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         setupViewPager();
         setupControls();
+        setupFloatingButtonsDrag();
     }
 
     private void setupViewPager() {
@@ -109,6 +119,42 @@ public class ImageViewerActivity extends AppCompatActivity {
     private void setupControls() {
         buttonAddToThreeDaysLater.setOnClickListener(v -> addToThreeDaysLater());
         buttonDelete.setOnClickListener(v -> deleteCurrentPhoto());
+    }
+
+    private void setupFloatingButtonsDrag() {
+        dragHandle.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        dX = layoutFloatingButtons.getX() - event.getRawX();
+                        dY = layoutFloatingButtons.getY() - event.getRawY();
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        float newX = event.getRawX() + dX;
+                        float newY = event.getRawY() + dY;
+
+                        // 限制在屏幕范围内
+                        View parent = (View) layoutFloatingButtons.getParent();
+                        int maxX = parent.getWidth() - layoutFloatingButtons.getWidth();
+                        int maxY = parent.getHeight() - layoutFloatingButtons.getHeight();
+
+                        newX = Math.max(0, Math.min(newX, maxX));
+                        newY = Math.max(0, Math.min(newY, maxY));
+
+                        layoutFloatingButtons.setX(newX);
+                        layoutFloatingButtons.setY(newY);
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                        return true;
+
+                    default:
+                        return false;
+                }
+            }
+        });
     }
 
     private void addToThreeDaysLater() {
@@ -184,8 +230,10 @@ public class ImageViewerActivity extends AppCompatActivity {
     private void toggleControls() {
         if (controlsVisible) {
             layoutControls.setVisibility(View.GONE);
+            layoutFloatingButtons.setVisibility(View.GONE);
         } else {
             layoutControls.setVisibility(View.VISIBLE);
+            layoutFloatingButtons.setVisibility(View.VISIBLE);
         }
         controlsVisible = !controlsVisible;
     }
