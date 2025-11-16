@@ -361,11 +361,9 @@ public class ImageViewerActivity extends AppCompatActivity {
                 photos.add(position, photo);
                 adapter.notifyItemInserted(position);
 
-                // 更新当前位置
-                if (position <= currentPosition) {
-                    currentPosition = position;
-                    viewPager.setCurrentItem(currentPosition, false);
-                }
+                // 自动跳转到恢复的图片位置
+                currentPosition = position;
+                viewPager.setCurrentItem(currentPosition, false);
 
                 updatePageInfo();
                 updateUndoButton();
@@ -419,11 +417,9 @@ public class ImageViewerActivity extends AppCompatActivity {
                                 photos.add(position, originalPhoto);
                                 adapter.notifyItemInserted(position);
 
-                                // 更新当前位置
-                                if (position <= currentPosition) {
-                                    currentPosition = position;
-                                    viewPager.setCurrentItem(currentPosition, false);
-                                }
+                                // 自动跳转到恢复的图片位置
+                                currentPosition = position;
+                                viewPager.setCurrentItem(currentPosition, false);
 
                                 updatePageInfo();
                                 updateUndoButton();
@@ -455,10 +451,9 @@ public class ImageViewerActivity extends AppCompatActivity {
                             photos.add(position, originalPhoto);
                             adapter.notifyItemInserted(position);
 
-                            if (position <= currentPosition) {
-                                currentPosition = position;
-                                viewPager.setCurrentItem(currentPosition, false);
-                            }
+                            // 自动跳转到恢复的图片位置
+                            currentPosition = position;
+                            viewPager.setCurrentItem(currentPosition, false);
 
                             updatePageInfo();
                             updateUndoButton();
