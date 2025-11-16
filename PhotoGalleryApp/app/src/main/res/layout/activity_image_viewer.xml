@@ -25,24 +25,24 @@
             android:gravity="center">
 
             <Button
-                android:id="@+id/buttonAddToThreeDaysLater"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:text="添加到3天后"
-                android:textSize="16sp"
-                android:backgroundTint="#4CAF50" />
-
-            <Button
                 android:id="@+id/buttonDelete"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
                 android:text="删除"
                 android:textSize="16sp"
                 android:backgroundTint="#F44336" />
+
+            <Button
+                android:id="@+id/buttonAddToThreeDaysLater"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="添加到3天后"
+                android:textSize="16sp"
+                android:backgroundTint="#4CAF50" />
 
         </LinearLayout>
 
