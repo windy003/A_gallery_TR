@@ -303,21 +303,47 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private void addToThreeDaysLater() {
         Photo currentVideo = videos.get(currentPosition);
 
+        android.util.Log.d("VideoPlayer", "=== 开始3天后操作 ===");
+        android.util.Log.d("VideoPlayer", "视频名称: " + currentVideo.getName());
+        android.util.Log.d("VideoPlayer", "视频ID: " + currentVideo.getId());
+        android.util.Log.d("VideoPlayer", "视频URI: " + currentVideo.getUri());
+        android.util.Log.d("VideoPlayer", "视频路径: " + currentVideo.getPath());
+
+        // 确保有有效的URI
+        Uri videoUri = currentVideo.getUri();
+        if (videoUri == null) {
+            // 使用视频ID构建content:// URI
+            videoUri = ContentUris.withAppendedId(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    currentVideo.getId()
+            );
+            android.util.Log.d("VideoPlayer", "URI为空，使用ID构建: " + videoUri);
+        }
+
+        final Uri finalVideoUri = videoUri;
         Toast.makeText(this, "正在复制文件...", Toast.LENGTH_SHORT).show();
 
         new Thread(() -> {
             FileOperationHelper helper = new FileOperationHelper(this);
 
-            // 复制视频文件
-            long newId = helper.copyVideoFile(currentVideo.getUri(), currentVideo.getName());
+            // 复制视频文件到 Movies/ 目录（新文件会有新的 DATE_ADDED）
+            // 应用会根据 DATE_ADDED + 3天自动将其归类到正确的日期文件夹
+            android.util.Log.d("VideoPlayer", "开始复制视频文件...");
+            android.util.Log.d("VideoPlayer", "使用URI: " + finalVideoUri);
+            long newId = helper.copyVideoFile(finalVideoUri, currentVideo.getName());
+            android.util.Log.d("VideoPlayer", "复制结果 newId: " + newId);
 
             runOnUiThread(() -> {
                 if (newId != -1) {
+                    android.util.Log.d("VideoPlayer", "复制成功，开始删除原文件...");
                     // 直接删除原文件
                     deleteVideoFromMediaStore(currentVideo, () -> {
+                        android.util.Log.d("VideoPlayer", "删除原文件成功，执行清理...");
                         performDelayCleanup();
+                        Toast.makeText(VideoPlayerActivity.this, "已移到3天后", Toast.LENGTH_SHORT).show();
                     });
                 } else {
+                    android.util.Log.e("VideoPlayer", "复制文件失败!");
                     Toast.makeText(VideoPlayerActivity.this, "复制文件失败", Toast.LENGTH_SHORT).show();
                 }
             });
@@ -328,21 +354,29 @@ public class VideoPlayerActivity extends AppCompatActivity {
      * 从MediaStore中删除视频
      */
     private void deleteVideoFromMediaStore(Photo video, Runnable onSuccess) {
+        android.util.Log.d("VideoPlayer", "=== 删除原视频 ===");
+        android.util.Log.d("VideoPlayer", "视频ID: " + video.getId());
+
         Uri videoUri = ContentUris.withAppendedId(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                 video.getId()
         );
+        android.util.Log.d("VideoPlayer", "删除URI: " + videoUri);
 
         ContentResolver resolver = getContentResolver();
 
         try {
+            android.util.Log.d("VideoPlayer", "尝试直接删除...");
             int deletedRows = resolver.delete(videoUri, null, null);
+            android.util.Log.d("VideoPlayer", "删除结果: " + deletedRows + " 行");
             if (deletedRows > 0) {
                 onSuccess.run();
             } else {
+                android.util.Log.e("VideoPlayer", "删除失败，返回0行");
                 Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
             }
         } catch (SecurityException e) {
+            android.util.Log.w("VideoPlayer", "SecurityException，需要用户确认: " + e.getMessage());
             // Android 10+ 需要用户确认
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
@@ -350,15 +384,21 @@ public class VideoPlayerActivity extends AppCompatActivity {
                             resolver,
                             Collections.singletonList(videoUri)
                     );
+                    android.util.Log.d("VideoPlayer", "启动删除确认对话框...");
                     delayDeleteRequestLauncher.launch(
                             new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build()
                     );
                 } catch (Exception ex) {
+                    android.util.Log.e("VideoPlayer", "创建删除请求失败: " + ex.getMessage(), ex);
                     Toast.makeText(this, "删除失败: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             } else {
+                android.util.Log.e("VideoPlayer", "删除失败: " + e.getMessage());
                 Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
+        } catch (Exception e) {
+            android.util.Log.e("VideoPlayer", "删除时发生意外错误: " + e.getMessage(), e);
+            Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
