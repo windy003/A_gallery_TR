@@ -13,17 +13,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.HashSet;
 
 public class PhotoManager {
     private Context context;
     private static final int DELAY_DAYS = 3; // 延迟天数
-    private DeletedPhotoDao deletedPhotoDao;
 
     public PhotoManager(Context context) {
         this.context = context;
-        this.deletedPhotoDao = AppDatabase.getInstance(context).deletedPhotoDao();
     }
 
     /**
@@ -131,35 +127,10 @@ public class PhotoManager {
         allMedia.addAll(getImages());
         allMedia.addAll(getVideos());
 
-        // 过滤掉已在回收站中的照片
-        Set<Long> deletedIds = getDeletedMediaStoreIds();
-        List<Photo> filteredMedia = new ArrayList<>();
-        for (Photo photo : allMedia) {
-            if (!deletedIds.contains(photo.getId())) {
-                filteredMedia.add(photo);
-            }
-        }
-
         // 按日期排序（最新的在前）
-        filteredMedia.sort((p1, p2) -> Long.compare(p2.getDateAdded(), p1.getDateAdded()));
+        allMedia.sort((p1, p2) -> Long.compare(p2.getDateAdded(), p1.getDateAdded()));
 
-        return filteredMedia;
-    }
-
-    /**
-     * 获取所有已删除照片的MediaStore ID集合
-     */
-    private Set<Long> getDeletedMediaStoreIds() {
-        Set<Long> deletedIds = new HashSet<>();
-        try {
-            List<DeletedPhoto> deletedPhotos = deletedPhotoDao.getAll();
-            for (DeletedPhoto deleted : deletedPhotos) {
-                deletedIds.add(deleted.getMediaStoreId());
-            }
-        } catch (Exception e) {
-            // 如果查询失败，返回空集合，不影响正常功能
-        }
-        return deletedIds;
+        return allMedia;
     }
 
     /**

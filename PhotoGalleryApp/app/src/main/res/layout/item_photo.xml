@@ -56,4 +56,14 @@
         android:textSize="10sp"
         android:visibility="gone" />
 
+    <!-- 选中标记 -->
+    <ImageView
+        android:id="@+id/imageViewCheckMark"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="4dp"
+        android:src="@android:drawable/checkbox_on_background"
+        android:visibility="gone" />
+
 </FrameLayout>

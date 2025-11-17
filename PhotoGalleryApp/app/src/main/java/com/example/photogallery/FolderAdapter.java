@@ -38,21 +38,13 @@ public class FolderAdapter extends RecyclerView.Adapter<FolderAdapter.FolderView
     public void onBindViewHolder(@NonNull FolderViewHolder holder, int position) {
         Folder folder = folders.get(position);
         holder.textViewFolderName.setText(folder.getDisplayName());
+        holder.textViewPhotoCount.setText(folder.getPhotoCount() + " 张照片");
 
-        // 特殊处理回收站文件夹：不显示照片数量（数量已包含在displayName中）
-        if ("recycle_bin".equals(folder.getName())) {
-            holder.textViewPhotoCount.setText(""); // 回收站的数量已在displayName中显示
-            // 设置回收站图标
-            holder.imageViewCover.setImageResource(android.R.drawable.ic_menu_delete);
-        } else {
-            holder.textViewPhotoCount.setText(folder.getPhotoCount() + " 张照片");
-
-            if (folder.getCoverPhotoPath() != null) {
-                Glide.with(context)
-                        .load(new File(folder.getCoverPhotoPath()))
-                        .centerCrop()
-                        .into(holder.imageViewCover);
-            }
+        if (folder.getCoverPhotoPath() != null) {
+            Glide.with(context)
+                    .load(new File(folder.getCoverPhotoPath()))
+                    .centerCrop()
+                    .into(holder.imageViewCover);
         }
 
         holder.itemView.setOnClickListener(v -> {

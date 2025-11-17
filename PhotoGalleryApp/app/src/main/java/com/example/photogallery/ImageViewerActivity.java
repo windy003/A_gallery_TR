@@ -18,6 +18,7 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.IntentSenderRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager2.widget.ViewPager2;
 import java.util.ArrayList;
@@ -45,43 +46,41 @@ public class ImageViewerActivity extends AppCompatActivity {
     private FileOperationHelper fileOperationHelper;
     private Photo photoToDelay; // 临时存储待延迟的图片
     private int positionToDelay; // 临时存储待延迟的位置
-    private RecycleBinManager recycleBinManager;
+    private long newPhotoIdForDelay; // 临时存储延迟操作中新创建的照片ID
 
     // 悬浮按钮拖动相关变量
     private float dX, dY;
 
-    // 撤销相关变量
-    private LinkedList<UndoAction> undoStack = new LinkedList<>();
-    private static final int MAX_UNDO_COUNT = 5;
+    // 撤销管理器
+    private PendingDeleteManager pendingDeleteManager = new PendingDeleteManager();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_image_viewer);
 
-        // 初始化删除请求启动器
+        // 初始化删除请求启动器（用于退出时批量删除）
         deleteRequestLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartIntentSenderForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK) {
-                        // 用户确认删除，执行删除后的操作
-                        performDeleteCleanup();
+                        // 用户确认删除，清空队列并退出
+                        pendingDeleteManager.clear();
+                        setResult(RESULT_OK);
+                        finish();
                     } else {
-                        Toast.makeText(this, "删除已取消", Toast.LENGTH_SHORT).show();
+                        // 用户取消删除，恢复所有照片到列表
+                        Toast.makeText(this, "删除已取消，文件已恢复", Toast.LENGTH_SHORT).show();
+                        restoreAllPendingDeletes();
                     }
                 }
         );
 
-        // 初始化延迟操作中的删除请求启动器
+        // 初始化延迟操作中的删除请求启动器（暂不使用）
         delayDeleteRequestLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartIntentSenderForResult(),
                 result -> {
-                    if (result.getResultCode() == RESULT_OK) {
-                        // 用户确认删除旧文件，延迟操作完成
-                        performDelayCleanup();
-                    } else {
-                        Toast.makeText(this, "延迟操作已取消", Toast.LENGTH_SHORT).show();
-                    }
+                    // 暂不使用
                 }
         );
 
@@ -100,11 +99,11 @@ public class ImageViewerActivity extends AppCompatActivity {
         isDateFolder = getIntent().getBooleanExtra("is_date_folder", false);
 
         fileOperationHelper = new FileOperationHelper(this);
-        recycleBinManager = new RecycleBinManager(this);
 
         setupViewPager();
         setupControls();
         setupFloatingButtonsDrag();
+        updateUndoButton();
     }
 
     private void setupViewPager() {
@@ -130,7 +129,6 @@ public class ImageViewerActivity extends AppCompatActivity {
         buttonAddToThreeDaysLater.setOnClickListener(v -> addToThreeDaysLater());
         buttonDelete.setOnClickListener(v -> deleteCurrentPhoto());
         buttonUndo.setOnClickListener(v -> performUndo());
-        updateUndoButton();
     }
 
     private void setupFloatingButtonsDrag() {
@@ -175,8 +173,8 @@ public class ImageViewerActivity extends AppCompatActivity {
         }
 
         Photo currentPhoto = photos.get(currentPosition);
-        photoToDelay = currentPhoto; // 保存引用，供删除回调使用
-        positionToDelay = currentPosition; // 保存位置，供撤销使用
+        photoToDelay = currentPhoto; // 保存引用
+        positionToDelay = currentPosition; // 保存位置
 
         Toast.makeText(this, "正在复制文件...", Toast.LENGTH_SHORT).show();
 
@@ -190,23 +188,57 @@ public class ImageViewerActivity extends AppCompatActivity {
                     return;
                 }
 
-                // 第二步：使用软删除（移到回收站），避免系统权限对话框
-                recycleBinManager.moveToRecycleBin(currentPhoto, new RecycleBinManager.Callback() {
-                    @Override
-                    public void onSuccess() {
-                        // 记录撤销操作
-                        addUndoAction(UndoAction.createDelayAction(photoToDelay, positionToDelay, newPhotoId));
-                        performDelayCleanup();
-                    }
+                newPhotoIdForDelay = newPhotoId;
 
-                    @Override
-                    public void onError(String error) {
-                        Toast.makeText(ImageViewerActivity.this,
-                                "移除旧文件失败: " + error, Toast.LENGTH_SHORT).show();
-                    }
-                });
+                // 第二步：软删除原文件（从列表移除，退出时才真正删除）
+                // 添加到撤销队列
+                pendingDeleteManager.addPendingDelete(
+                    new PendingDeleteManager.PendingDelete(
+                        photoToDelay, positionToDelay,
+                        PendingDeleteManager.PendingDelete.TYPE_DELAY, newPhotoIdForDelay
+                    )
+                );
+                performDelayCleanup();
             });
         }).start();
+    }
+
+    /**
+     * 从MediaStore中删除照片
+     */
+    private void deletePhotoFromMediaStore(Photo photo, Runnable onSuccess) {
+        Uri photoUri = ContentUris.withAppendedId(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                photo.getId()
+        );
+
+        ContentResolver resolver = getContentResolver();
+
+        try {
+            int deletedRows = resolver.delete(photoUri, null, null);
+            if (deletedRows > 0) {
+                onSuccess.run();
+            } else {
+                Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
+            }
+        } catch (SecurityException e) {
+            // Android 10+ 需要用户确认
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    PendingIntent pendingIntent = MediaStore.createDeleteRequest(
+                            resolver,
+                            Collections.singletonList(photoUri)
+                    );
+                    delayDeleteRequestLauncher.launch(
+                            new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build()
+                    );
+                } catch (Exception ex) {
+                    Toast.makeText(this, "删除失败: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     /**
@@ -219,8 +251,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         // 如果列表为空，关闭Activity
         if (photos.isEmpty()) {
             Toast.makeText(this, "延迟操作完成", Toast.LENGTH_SHORT).show();
-            setResult(RESULT_OK);
-            finish();
+            finishWithPendingDeletes();
             return;
         }
 
@@ -231,11 +262,12 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         // 更新页面信息
         updatePageInfo();
+        updateUndoButton();
 
         // 设置result，通知上级Activity刷新
         setResult(RESULT_OK);
 
-        Toast.makeText(this, "延迟操作完成，文件将在3天后显示", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "已移到3天后（可撤销）", Toast.LENGTH_SHORT).show();
     }
 
     private void updatePageInfo() {
@@ -258,21 +290,16 @@ public class ImageViewerActivity extends AppCompatActivity {
             Photo photoToDelete = photos.get(currentPosition);
             int positionToDelete = currentPosition;
 
-            // 使用软删除：移动到回收站
-            recycleBinManager.moveToRecycleBin(photoToDelete, new RecycleBinManager.Callback() {
-                @Override
-                public void onSuccess() {
-                    // 记录撤销操作
-                    addUndoAction(UndoAction.createDeleteAction(photoToDelete, positionToDelete));
-                    performDeleteCleanup();
-                    Toast.makeText(ImageViewerActivity.this, "已移至回收站，24小时后自动删除", Toast.LENGTH_SHORT).show();
-                }
-
-                @Override
-                public void onError(String error) {
-                    Toast.makeText(ImageViewerActivity.this, "移至回收站失败: " + error, Toast.LENGTH_SHORT).show();
-                }
-            });
+            // 软删除：先从列表中移除，但不立即删除文件
+            // 添加到撤销队列
+            pendingDeleteManager.addPendingDelete(
+                new PendingDeleteManager.PendingDelete(
+                    photoToDelete, positionToDelete,
+                    PendingDeleteManager.PendingDelete.TYPE_DELETE
+                )
+            );
+            performDeleteCleanup();
+            Toast.makeText(this, "已删除（可撤销，退出后永久删除）", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -284,8 +311,7 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         // 如果删除后列表为空，关闭Activity
         if (photos.isEmpty()) {
-            setResult(RESULT_OK);
-            finish();
+            finishWithPendingDeletes();
             return;
         }
 
@@ -296,33 +322,22 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         // 更新页面信息
         updatePageInfo();
+        updateUndoButton();
 
         // 设置result，通知上级Activity刷新
         setResult(RESULT_OK);
     }
 
     /**
-     * 添加撤销操作到栈中
-     */
-    private void addUndoAction(UndoAction action) {
-        undoStack.addFirst(action);
-        // 保持栈大小不超过最大值
-        while (undoStack.size() > MAX_UNDO_COUNT) {
-            undoStack.removeLast();
-        }
-        updateUndoButton();
-    }
-
-    /**
      * 更新撤销按钮状态
      */
     private void updateUndoButton() {
-        if (undoStack.isEmpty()) {
+        if (pendingDeleteManager.canUndo()) {
+            buttonUndo.setEnabled(true);
+            buttonUndo.setText("撤销(" + pendingDeleteManager.getCount() + ")");
+        } else {
             buttonUndo.setEnabled(false);
             buttonUndo.setText("撤销");
-        } else {
-            buttonUndo.setEnabled(true);
-            buttonUndo.setText("撤销(" + undoStack.size() + ")");
         }
     }
 
@@ -330,155 +345,177 @@ public class ImageViewerActivity extends AppCompatActivity {
      * 执行撤销操作
      */
     private void performUndo() {
-        if (undoStack.isEmpty()) {
+        PendingDeleteManager.PendingDelete pendingDelete = pendingDeleteManager.undo();
+        if (pendingDelete == null) {
             Toast.makeText(this, "没有可撤销的操作", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        UndoAction action = undoStack.removeFirst();
+        Photo photo = pendingDelete.getPhoto();
+        int originalPosition = pendingDelete.getOriginalPosition();
 
-        if (action.getActionType() == UndoAction.TYPE_DELETE) {
-            undoDelete(action);
-        } else if (action.getActionType() == UndoAction.TYPE_DELAY) {
-            undoDelay(action);
+        if (pendingDelete.getActionType() == PendingDeleteManager.PendingDelete.TYPE_DELETE) {
+            // 撤销删除操作：将照片恢复到列表中
+            int position = Math.min(originalPosition, photos.size());
+            photos.add(position, photo);
+            adapter.notifyItemInserted(position);
+
+            // 自动跳转到恢复的图片位置
+            currentPosition = position;
+            viewPager.setCurrentItem(currentPosition, false);
+
+            updatePageInfo();
+            Toast.makeText(this, "已撤销删除: " + photo.getName(), Toast.LENGTH_SHORT).show();
+        } else if (pendingDelete.getActionType() == PendingDeleteManager.PendingDelete.TYPE_DELAY) {
+            // 撤销延迟操作：删除新创建的副本，恢复原照片到列表
+            long newPhotoId = pendingDelete.getNewPhotoId();
+            if (newPhotoId != -1) {
+                // 删除新创建的副本
+                Uri newPhotoUri = ContentUris.withAppendedId(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        newPhotoId
+                );
+                try {
+                    getContentResolver().delete(newPhotoUri, null, null);
+
+                    // 恢复原照片到列表
+                    int position = Math.min(originalPosition, photos.size());
+                    photos.add(position, photo);
+                    adapter.notifyItemInserted(position);
+
+                    currentPosition = position;
+                    viewPager.setCurrentItem(currentPosition, false);
+
+                    updatePageInfo();
+                    Toast.makeText(this, "已撤销延迟操作: " + photo.getName(), Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "撤销失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+
+        updateUndoButton();
+        setResult(RESULT_OK);
+    }
+
+    /**
+     * 执行所有待删除的操作（退出时调用）
+     */
+    private void executePendingDeletes() {
+        List<PendingDeleteManager.PendingDelete> pendingDeletes = pendingDeleteManager.getAllPendingDeletes();
+
+        if (pendingDeletes.isEmpty()) {
+            setResult(RESULT_OK);
+            finish();
+            return;
+        }
+
+        // 收集所有需要删除的URI
+        List<Uri> urisToDelete = new ArrayList<>();
+        for (PendingDeleteManager.PendingDelete pending : pendingDeletes) {
+            Photo photo = pending.getPhoto();
+            Uri photoUri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    photo.getId()
+            );
+            urisToDelete.add(photoUri);
+        }
+
+        // 使用批量删除请求
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ 使用批量删除请求
+            try {
+                PendingIntent pendingIntent = MediaStore.createDeleteRequest(
+                        getContentResolver(),
+                        urisToDelete
+                );
+                deleteRequestLauncher.launch(
+                        new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build()
+                );
+            } catch (Exception e) {
+                Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                pendingDeleteManager.clear();
+                setResult(RESULT_OK);
+                finish();
+            }
+        } else {
+            // Android 10 及以下，逐个删除
+            int deletedCount = 0;
+            for (Uri uri : urisToDelete) {
+                try {
+                    int deleted = getContentResolver().delete(uri, null, null);
+                    if (deleted > 0) {
+                        deletedCount++;
+                    }
+                } catch (Exception e) {
+                    // 忽略单个删除错误
+                }
+            }
+            pendingDeleteManager.clear();
+            setResult(RESULT_OK);
+            finish();
         }
     }
 
     /**
-     * 撤销删除操作
+     * 恢复所有待删除的照片到列表（用户取消删除时）
      */
-    private void undoDelete(UndoAction action) {
-        Photo photo = action.getOriginalPhoto();
+    private void restoreAllPendingDeletes() {
+        List<PendingDeleteManager.PendingDelete> pendingDeletes = pendingDeleteManager.getAllPendingDeletes();
 
-        // 创建DeletedPhoto对象用于从回收站恢复
-        DeletedPhoto deletedPhoto = DeletedPhoto.fromPhoto(photo);
+        // 按原始位置排序，从后往前恢复
+        for (int i = pendingDeletes.size() - 1; i >= 0; i--) {
+            PendingDeleteManager.PendingDelete pending = pendingDeletes.get(i);
 
-        recycleBinManager.restoreFromRecycleBin(deletedPhoto, new RecycleBinManager.Callback() {
-            @Override
-            public void onSuccess() {
-                // 将照片恢复到列表中
-                int position = Math.min(action.getOriginalPosition(), photos.size());
-                photos.add(position, photo);
-                adapter.notifyItemInserted(position);
-
-                // 自动跳转到恢复的图片位置
-                currentPosition = position;
-                viewPager.setCurrentItem(currentPosition, false);
-
-                updatePageInfo();
-                updateUndoButton();
-                setResult(RESULT_OK);
-
-                Toast.makeText(ImageViewerActivity.this,
-                    "已撤销删除: " + photo.getName(), Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onError(String error) {
-                // 恢复失败，将操作放回栈中
-                undoStack.addFirst(action);
-                updateUndoButton();
-                Toast.makeText(ImageViewerActivity.this,
-                    "撤销失败: " + error, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
-    /**
-     * 撤销移到3天后操作
-     */
-    private void undoDelay(UndoAction action) {
-        Photo originalPhoto = action.getOriginalPhoto();
-        long newPhotoId = action.getNewPhotoId();
-
-        Toast.makeText(this, "正在撤销...", Toast.LENGTH_SHORT).show();
-
-        // 第一步：删除新创建的副本
-        new Thread(() -> {
-            Uri newPhotoUri = ContentUris.withAppendedId(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    newPhotoId
-            );
-
-            ContentResolver resolver = getContentResolver();
-            try {
-                int deletedRows = resolver.delete(newPhotoUri, null, null);
-
-                runOnUiThread(() -> {
-                    if (deletedRows > 0 || true) { // 即使删除失败也继续恢复原文件
-                        // 第二步：从回收站恢复原文件
-                        DeletedPhoto deletedPhoto = DeletedPhoto.fromPhoto(originalPhoto);
-
-                        recycleBinManager.restoreFromRecycleBin(deletedPhoto, new RecycleBinManager.Callback() {
-                            @Override
-                            public void onSuccess() {
-                                // 将照片恢复到列表中
-                                int position = Math.min(action.getOriginalPosition(), photos.size());
-                                photos.add(position, originalPhoto);
-                                adapter.notifyItemInserted(position);
-
-                                // 自动跳转到恢复的图片位置
-                                currentPosition = position;
-                                viewPager.setCurrentItem(currentPosition, false);
-
-                                updatePageInfo();
-                                updateUndoButton();
-                                setResult(RESULT_OK);
-
-                                Toast.makeText(ImageViewerActivity.this,
-                                    "已撤销移到3天后: " + originalPhoto.getName(), Toast.LENGTH_SHORT).show();
-                            }
-
-                            @Override
-                            public void onError(String error) {
-                                // 恢复失败，将操作放回栈中
-                                undoStack.addFirst(action);
-                                updateUndoButton();
-                                Toast.makeText(ImageViewerActivity.this,
-                                    "撤销失败: " + error, Toast.LENGTH_SHORT).show();
-                            }
-                        });
+            if (pending.getActionType() == PendingDeleteManager.PendingDelete.TYPE_DELAY) {
+                // 延迟操作：需要删除新创建的副本
+                long newPhotoId = pending.getNewPhotoId();
+                if (newPhotoId != -1) {
+                    Uri newPhotoUri = ContentUris.withAppendedId(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            newPhotoId
+                    );
+                    try {
+                        getContentResolver().delete(newPhotoUri, null, null);
+                    } catch (Exception e) {
+                        // 忽略错误
                     }
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    // 即使删除新文件失败，也尝试恢复原文件
-                    DeletedPhoto deletedPhoto = DeletedPhoto.fromPhoto(originalPhoto);
-                    recycleBinManager.restoreFromRecycleBin(deletedPhoto, new RecycleBinManager.Callback() {
-                        @Override
-                        public void onSuccess() {
-                            int position = Math.min(action.getOriginalPosition(), photos.size());
-                            photos.add(position, originalPhoto);
-                            adapter.notifyItemInserted(position);
-
-                            // 自动跳转到恢复的图片位置
-                            currentPosition = position;
-                            viewPager.setCurrentItem(currentPosition, false);
-
-                            updatePageInfo();
-                            updateUndoButton();
-                            setResult(RESULT_OK);
-
-                            Toast.makeText(ImageViewerActivity.this,
-                                "已撤销移到3天后(部分): " + originalPhoto.getName(), Toast.LENGTH_SHORT).show();
-                        }
-
-                        @Override
-                        public void onError(String error) {
-                            undoStack.addFirst(action);
-                            updateUndoButton();
-                            Toast.makeText(ImageViewerActivity.this,
-                                "撤销失败: " + error, Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                });
+                }
             }
-        }).start();
+
+            // 恢复照片到列表
+            Photo photo = pending.getPhoto();
+            int position = Math.min(pending.getOriginalPosition(), photos.size());
+            photos.add(position, photo);
+            adapter.notifyItemInserted(position);
+        }
+
+        pendingDeleteManager.clear();
+        updatePageInfo();
+        updateUndoButton();
     }
 
     @Override
     public void onBackPressed() {
-        super.onBackPressed();
-        finish();
+        finishWithPendingDeletes();
+    }
+
+    /**
+     * 完成Activity并执行待删除操作
+     */
+    private void finishWithPendingDeletes() {
+        if (pendingDeleteManager.canUndo()) {
+            // 有待删除的文件，执行删除
+            executePendingDeletes();
+        } else {
+            // 没有待删除的文件，直接退出
+            setResult(RESULT_OK);
+            finish();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
     }
 }

@@ -1,6 +1,9 @@
 package com.example.photogallery;
 
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.Intent;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -8,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -23,6 +27,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Locale;
 
 public class VideoPlayerActivity extends AppCompatActivity {
@@ -42,7 +47,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private boolean controlsVisible = true;
 
     private ActivityResultLauncher<IntentSenderRequest> deleteRequestLauncher;
-    private RecycleBinManager recycleBinManager;
+    private ActivityResultLauncher<IntentSenderRequest> delayDeleteRequestLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,12 +80,24 @@ public class VideoPlayerActivity extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK) {
                         performDeleteCleanup();
+                        Toast.makeText(this, "已永久删除", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "删除已取消", Toast.LENGTH_SHORT).show();
                     }
                 }
         );
 
-        // 初始化回收站管理器
-        recycleBinManager = new RecycleBinManager(this);
+        // 设置延迟操作删除请求启动器
+        delayDeleteRequestLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartIntentSenderForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK) {
+                        performDelayCleanup();
+                    } else {
+                        Toast.makeText(this, "延迟操作已取消", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
 
         // 设置按钮监听器
         buttonPlayPause.setOnClickListener(v -> togglePlayPause());
@@ -296,18 +313,9 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
             runOnUiThread(() -> {
                 if (newId != -1) {
-                    // 使用软删除（移到回收站），避免系统权限对话框
-                    recycleBinManager.moveToRecycleBin(currentVideo, new RecycleBinManager.Callback() {
-                        @Override
-                        public void onSuccess() {
-                            performDelayCleanup();
-                        }
-
-                        @Override
-                        public void onError(String error) {
-                            Toast.makeText(VideoPlayerActivity.this,
-                                    "移除旧文件失败: " + error, Toast.LENGTH_SHORT).show();
-                        }
+                    // 直接删除原文件
+                    deleteVideoFromMediaStore(currentVideo, () -> {
+                        performDelayCleanup();
                     });
                 } else {
                     Toast.makeText(VideoPlayerActivity.this, "复制文件失败", Toast.LENGTH_SHORT).show();
@@ -316,29 +324,91 @@ public class VideoPlayerActivity extends AppCompatActivity {
         }).start();
     }
 
+    /**
+     * 从MediaStore中删除视频
+     */
+    private void deleteVideoFromMediaStore(Photo video, Runnable onSuccess) {
+        Uri videoUri = ContentUris.withAppendedId(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                video.getId()
+        );
+
+        ContentResolver resolver = getContentResolver();
+
+        try {
+            int deletedRows = resolver.delete(videoUri, null, null);
+            if (deletedRows > 0) {
+                onSuccess.run();
+            } else {
+                Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
+            }
+        } catch (SecurityException e) {
+            // Android 10+ 需要用户确认
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    PendingIntent pendingIntent = MediaStore.createDeleteRequest(
+                            resolver,
+                            Collections.singletonList(videoUri)
+                    );
+                    delayDeleteRequestLauncher.launch(
+                            new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build()
+                    );
+                } catch (Exception ex) {
+                    Toast.makeText(this, "删除失败: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
     private void deleteCurrentVideo() {
         Photo currentVideo = videos.get(currentPosition);
 
         new AlertDialog.Builder(this)
                 .setTitle("确认删除")
-                .setMessage("确定要将此视频移至回收站吗？\n24小时后自动永久删除")
+                .setMessage("确定要永久删除此视频吗？此操作不可撤销。")
                 .setPositiveButton("删除", (dialog, which) -> {
-                    // 使用软删除：移动到回收站
-                    recycleBinManager.moveToRecycleBin(currentVideo, new RecycleBinManager.Callback() {
-                        @Override
-                        public void onSuccess() {
-                            performDeleteCleanup();
-                            Toast.makeText(VideoPlayerActivity.this, "已移至回收站，24小时后自动删除", Toast.LENGTH_SHORT).show();
-                        }
-
-                        @Override
-                        public void onError(String error) {
-                            Toast.makeText(VideoPlayerActivity.this, "移至回收站失败: " + error, Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                    performDeleteVideo(currentVideo);
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    private void performDeleteVideo(Photo video) {
+        Uri videoUri = ContentUris.withAppendedId(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                video.getId()
+        );
+
+        ContentResolver resolver = getContentResolver();
+
+        try {
+            int deletedRows = resolver.delete(videoUri, null, null);
+            if (deletedRows > 0) {
+                performDeleteCleanup();
+                Toast.makeText(this, "已永久删除", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
+            }
+        } catch (SecurityException e) {
+            // Android 10+ 需要用户确认
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    PendingIntent pendingIntent = MediaStore.createDeleteRequest(
+                            resolver,
+                            Collections.singletonList(videoUri)
+                    );
+                    deleteRequestLauncher.launch(
+                            new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build()
+                    );
+                } catch (Exception ex) {
+                    Toast.makeText(this, "删除失败: " + ex.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void performDelayCleanup() {
