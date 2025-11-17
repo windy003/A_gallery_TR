@@ -8,8 +8,6 @@ import java.util.List;
  * 实际删除会在退出Activity时执行
  */
 public class PendingDeleteManager {
-    private static final int MAX_UNDO_COUNT = 5;
-
     private LinkedList<PendingDelete> pendingDeletes = new LinkedList<>();
 
     public static class PendingDelete {
@@ -57,10 +55,6 @@ public class PendingDeleteManager {
      */
     public void addPendingDelete(PendingDelete pendingDelete) {
         pendingDeletes.addFirst(pendingDelete);
-        // 保持栈大小不超过最大值
-        while (pendingDeletes.size() > MAX_UNDO_COUNT) {
-            pendingDeletes.removeLast();
-        }
     }
 
     /**
