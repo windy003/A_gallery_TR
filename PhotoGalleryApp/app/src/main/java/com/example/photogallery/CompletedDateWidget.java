@@ -17,7 +17,6 @@ import java.util.Locale;
  */
 public class CompletedDateWidget extends AppWidgetProvider {
     private static final String PREFS_NAME = "IconManagerPrefs";
-    private static final String KEY_COMPLETED_DATE = "completed_date";
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {

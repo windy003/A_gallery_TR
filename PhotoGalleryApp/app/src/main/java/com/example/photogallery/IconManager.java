@@ -127,23 +127,4 @@ public class IconManager {
         return sdf.format(new Date());
     }
 
-    /**
-     * 获取保存的完成日期
-     * @return 完成日期字符串，如果未设置则返回null
-     */
-    public String getCompletedDate() {
-        return prefs.getString(KEY_COMPLETED_DATE, null);
-    }
-
-    /**
-     * 获取带日期的应用名称（用于显示）
-     * @return 如果有完成日期则返回 "Gallery_TR 日期"，否则返回 "Gallery_TR"
-     */
-    public String getAppNameWithDate() {
-        String completedDate = getCompletedDate();
-        if (completedDate != null && isCompleted()) {
-            return "Gallery_TR " + completedDate;
-        }
-        return "Gallery_TR";
-    }
 }
