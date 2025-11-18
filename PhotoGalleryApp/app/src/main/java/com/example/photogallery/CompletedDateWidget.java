@@ -27,20 +27,6 @@ public class CompletedDateWidget extends AppWidgetProvider {
         }
     }
 
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        super.onReceive(context, intent);
-
-        // 监听自定义的更新广播
-        if ("com.example.photogallery.UPDATE_WIDGET".equals(intent.getAction())) {
-            AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
-            int[] appWidgetIds = appWidgetManager.getAppWidgetIds(
-                new android.content.ComponentName(context, CompletedDateWidget.class)
-            );
-            onUpdate(context, appWidgetManager, appWidgetIds);
-        }
-    }
-
     /**
      * 更新单个widget
      */
