@@ -30,26 +30,33 @@ public class CompletedDateWidget extends AppWidgetProvider {
      * 更新单个widget
      */
     static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
-        // 获取保存的完成状态
+        // 获取保存的完成状态和完成日期
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         boolean isCompleted = prefs.getBoolean("is_completed", false);
+        String completedDate = prefs.getString("completed_date", "");
 
         // 获取当天日期（格式: MM/dd）
         SimpleDateFormat sdf = new SimpleDateFormat("MM/dd", Locale.getDefault());
         String todayDate = sdf.format(new Date());
 
-        Log.d("CompletedDateWidget", "更新widget - 完成状态: " + isCompleted + ", 当天日期: " + todayDate);
+        // 验证完成日期是否是今天
+        // 如果保存的日期不是今天，说明状态已过期，应显示为未完成
+        boolean isValidCompleted = isCompleted && completedDate.equals(todayDate);
+
+        Log.d("CompletedDateWidget", "更新widget - 完成状态: " + isCompleted +
+              ", 保存的日期: " + completedDate + ", 今天日期: " + todayDate +
+              ", 有效完成状态: " + isValidCompleted);
 
         // 构建widget的RemoteViews
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_completed_date);
 
-        if (isCompleted) {
-            // 已完成状态：显示已完成图标 + 当天日期
+        if (isValidCompleted) {
+            // 已完成且日期是今天：显示已完成图标 + 保存的日期
             views.setImageViewResource(R.id.widget_icon, R.drawable.ywc);
-            views.setTextViewText(R.id.widget_date_text, todayDate);
+            views.setTextViewText(R.id.widget_date_text, completedDate);
             views.setViewVisibility(R.id.widget_date_text, android.view.View.VISIBLE);
         } else {
-            // 未完成状态：只显示默认图标，不显示日期
+            // 未完成或日期已过期：只显示默认图标，不显示日期
             views.setImageViewResource(R.id.widget_icon, R.drawable.a2048x2048);
             views.setViewVisibility(R.id.widget_date_text, android.view.View.GONE);
         }

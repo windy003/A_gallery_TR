@@ -103,9 +103,15 @@ public class IconManager {
         editor.putBoolean(KEY_IS_COMPLETED, completed);
 
         if (completed) {
-            // 保存完成日期
-            String currentDate = getShortDateString();
+            // 保存完成日期（格式: MM/dd，供小部件直接显示）
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd", Locale.getDefault());
+            String currentDate = sdf.format(new Date());
             editor.putString(KEY_COMPLETED_DATE, currentDate);
+            Log.d(TAG, "保存完成日期: " + currentDate);
+        } else {
+            // 未完成时清空日期
+            editor.remove(KEY_COMPLETED_DATE);
+            Log.d(TAG, "清空完成日期");
         }
 
         editor.apply();
@@ -116,14 +122,6 @@ public class IconManager {
      */
     private String getTodayDateString() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-        return sdf.format(new Date());
-    }
-
-    /**
-     * 获取简短日期字符串 (格式: yyyy/MM/dd)
-     */
-    private String getShortDateString() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault());
         return sdf.format(new Date());
     }
 
