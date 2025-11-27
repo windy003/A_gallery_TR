@@ -34,6 +34,7 @@ public class ImageViewerActivity extends AppCompatActivity {
     private Button buttonAddToThreeDaysLater;
     private Button buttonDelete;
     private Button buttonUndo;
+    private Button buttonClearUndo;
     private TextView textViewPageInfo;
     private List<Photo> photos;
     private int currentPosition;
@@ -41,6 +42,7 @@ public class ImageViewerActivity extends AppCompatActivity {
     private ImagePagerAdapter adapter;
     private ActivityResultLauncher<IntentSenderRequest> deleteRequestLauncher;
     private ActivityResultLauncher<IntentSenderRequest> delayDeleteRequestLauncher;
+    private ActivityResultLauncher<IntentSenderRequest> clearUndoDeleteLauncher;
     private String folderName;
     private boolean isDateFolder;
     private FileOperationHelper fileOperationHelper;
@@ -84,6 +86,23 @@ public class ImageViewerActivity extends AppCompatActivity {
                 }
         );
 
+        // 初始化清空撤销的删除请求启动器
+        clearUndoDeleteLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartIntentSenderForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        // 用户确认删除，清空队列
+                        pendingDeleteManager.clear();
+                        updateUndoButton();
+                        Toast.makeText(this, "已清空撤销记录并删除文件", Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);
+                    } else {
+                        // 用户取消删除
+                        Toast.makeText(this, "已取消清空操作", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+
         viewPager = findViewById(R.id.viewPager);
         layoutControls = findViewById(R.id.layoutControls);
         layoutFloatingButtons = findViewById(R.id.layoutFloatingButtons);
@@ -91,6 +110,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         buttonAddToThreeDaysLater = findViewById(R.id.buttonAddToThreeDaysLater);
         buttonDelete = findViewById(R.id.buttonDelete);
         buttonUndo = findViewById(R.id.buttonUndo);
+        buttonClearUndo = findViewById(R.id.buttonClearUndo);
         textViewPageInfo = findViewById(R.id.textViewPageInfo);
 
         photos = (ArrayList<Photo>) getIntent().getSerializableExtra("photos");
@@ -129,6 +149,7 @@ public class ImageViewerActivity extends AppCompatActivity {
         buttonAddToThreeDaysLater.setOnClickListener(v -> addToThreeDaysLater());
         buttonDelete.setOnClickListener(v -> deleteCurrentPhoto());
         buttonUndo.setOnClickListener(v -> performUndo());
+        buttonClearUndo.setOnClickListener(v -> clearUndoHistory());
     }
 
     private void setupFloatingButtonsDrag() {
@@ -335,9 +356,94 @@ public class ImageViewerActivity extends AppCompatActivity {
         if (pendingDeleteManager.canUndo()) {
             buttonUndo.setEnabled(true);
             buttonUndo.setText("撤销(" + pendingDeleteManager.getCount() + ")");
+            buttonClearUndo.setEnabled(true);
         } else {
             buttonUndo.setEnabled(false);
             buttonUndo.setText("撤销");
+            buttonClearUndo.setEnabled(false);
+        }
+    }
+
+    /**
+     * 清空撤销历史
+     */
+    private void clearUndoHistory() {
+        if (!pendingDeleteManager.canUndo()) {
+            Toast.makeText(this, "没有可清空的撤销记录", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 显示确认对话框
+        new AlertDialog.Builder(this)
+            .setTitle("清空撤销记录")
+            .setMessage("确定要清空所有撤销记录吗？这将永久删除" + pendingDeleteManager.getCount() + "个文件。")
+            .setPositiveButton("确定", (dialog, which) -> {
+                // 执行所有待删除的操作
+                executePendingDeletesWithoutExit();
+            })
+            .setNegativeButton("取消", null)
+            .show();
+    }
+
+    /**
+     * 执行所有待删除的操作（不退出Activity）
+     */
+    private void executePendingDeletesWithoutExit() {
+        List<PendingDeleteManager.PendingDelete> pendingDeletes = pendingDeleteManager.getAllPendingDeletes();
+
+        if (pendingDeletes.isEmpty()) {
+            return;
+        }
+
+        // 收集所有需要删除的URI
+        List<Uri> urisToDelete = new ArrayList<>();
+        for (PendingDeleteManager.PendingDelete pending : pendingDeletes) {
+            Photo photo = pending.getPhoto();
+            Uri photoUri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    photo.getId()
+            );
+            urisToDelete.add(photoUri);
+        }
+
+        // 使用批量删除请求
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ 使用批量删除请求
+            try {
+                PendingIntent pendingIntent = MediaStore.createDeleteRequest(
+                        getContentResolver(),
+                        urisToDelete
+                );
+
+                clearUndoDeleteLauncher.launch(
+                        new IntentSenderRequest.Builder(pendingIntent.getIntentSender()).build()
+                );
+            } catch (Exception e) {
+                Toast.makeText(this, "删除失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            // Android 10 及以下，逐个删除
+            new Thread(() -> {
+                int deletedCount = 0;
+                for (Uri uri : urisToDelete) {
+                    try {
+                        int deleted = getContentResolver().delete(uri, null, null);
+                        if (deleted > 0) {
+                            deletedCount++;
+                        }
+                    } catch (Exception e) {
+                        // 忽略单个删除错误
+                    }
+                }
+
+                final int finalDeletedCount = deletedCount;
+                runOnUiThread(() -> {
+                    pendingDeleteManager.clear();
+                    updateUndoButton();
+                    Toast.makeText(this, "已删除 " + finalDeletedCount + " 个文件", Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK);
+                });
+            }).start();
         }
     }
 
