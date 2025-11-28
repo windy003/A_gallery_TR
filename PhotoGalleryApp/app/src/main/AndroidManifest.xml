@@ -33,6 +33,7 @@
             android:name=".ImageViewerActivity"
             android:exported="false"
             android:hardwareAccelerated="true"
+            android:configChanges="screenSize|screenLayout|orientation|keyboardHidden|smallestScreenSize"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
 
         <activity
