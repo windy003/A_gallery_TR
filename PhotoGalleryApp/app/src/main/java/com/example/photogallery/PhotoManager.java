@@ -59,9 +59,12 @@ public class PhotoManager {
                 long dateAdded = cursor.getLong(dateColumn);
                 long size = cursor.getLong(sizeColumn);
 
-                Photo photo = new Photo(id, path, name, dateAdded, size, Photo.TYPE_IMAGE, 0);
-                photo.setUri(Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, String.valueOf(id)));
-                photos.add(photo);
+                // 只扫描指定的两个目录
+                if (isInTargetDirectory(path)) {
+                    Photo photo = new Photo(id, path, name, dateAdded, size, Photo.TYPE_IMAGE, 0);
+                    photo.setUri(Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, String.valueOf(id)));
+                    photos.add(photo);
+                }
             }
             cursor.close();
         }
@@ -109,9 +112,12 @@ public class PhotoManager {
                 long size = cursor.getLong(sizeColumn);
                 long duration = cursor.getLong(durationColumn);
 
-                Photo video = new Photo(id, path, name, dateAdded, size, Photo.TYPE_VIDEO, duration);
-                video.setUri(Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, String.valueOf(id)));
-                videos.add(video);
+                // 只扫描指定的两个目录
+                if (isInTargetDirectory(path)) {
+                    Photo video = new Photo(id, path, name, dateAdded, size, Photo.TYPE_VIDEO, duration);
+                    video.setUri(Uri.withAppendedPath(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, String.valueOf(id)));
+                    videos.add(video);
+                }
             }
             cursor.close();
         }
@@ -215,5 +221,25 @@ public class PhotoManager {
      */
     public String getPhotoDisplayDate(Photo photo) {
         return getDisplayDate(photo.getDateAdded());
+    }
+
+    /**
+     * 判断文件路径是否在目标目录中
+     * 只扫描 /DCIM/Screenshots 和 /Pictures/Screenshots 两个目录
+     *
+     * @param path 文件路径
+     * @return 是否在目标目录中
+     */
+    private boolean isInTargetDirectory(String path) {
+        if (path == null) {
+            return false;
+        }
+
+        // 转换为小写以进行不区分大小写的比较
+        String lowerPath = path.toLowerCase();
+
+        // 检查是否在 /DCIM/Screenshots 或 /Pictures/Screenshots 目录中
+        return lowerPath.contains("/dcim/screenshots") ||
+               lowerPath.contains("/pictures/screenshots");
     }
 }
