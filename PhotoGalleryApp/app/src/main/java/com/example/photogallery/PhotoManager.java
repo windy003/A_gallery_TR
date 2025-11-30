@@ -225,7 +225,7 @@ public class PhotoManager {
 
     /**
      * 判断文件路径是否在目标目录中
-     * 只扫描 /DCIM/Screenshots 和 /Pictures/Screenshots 两个目录
+     * 只扫描 /DCIM/Screenshots、/Pictures/Screenshots 和 /Pictures/ImageStitcher 三个目录
      *
      * @param path 文件路径
      * @return 是否在目标目录中
@@ -238,8 +238,9 @@ public class PhotoManager {
         // 转换为小写以进行不区分大小写的比较
         String lowerPath = path.toLowerCase();
 
-        // 检查是否在 /DCIM/Screenshots 或 /Pictures/Screenshots 目录中
+        // 检查是否在 /DCIM/Screenshots、/Pictures/Screenshots 或 /Pictures/ImageStitcher 目录中
         return lowerPath.contains("/dcim/screenshots") ||
-               lowerPath.contains("/pictures/screenshots");
+               lowerPath.contains("/pictures/screenshots") ||
+               lowerPath.contains("/pictures/imagestitcher");
     }
 }
