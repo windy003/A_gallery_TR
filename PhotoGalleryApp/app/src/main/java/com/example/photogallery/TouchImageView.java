@@ -75,41 +75,50 @@ public class TouchImageView extends AppCompatImageView {
                     break;
 
                 case MotionEvent.ACTION_MOVE:
-                    if (mode == DRAG && saveScale > 1f) {
-                        // 只有在放大状态下才拖动
-                        disallowParentInterceptTouchEvent();
-
+                    if (mode == DRAG) {
                         float deltaX = curr.x - last.x;
                         float deltaY = curr.y - last.y;
                         float scaleWidth = Math.round(origWidth * saveScale);
                         float scaleHeight = Math.round(origHeight * saveScale);
 
-                        if (scaleWidth < width) {
-                            deltaX = 0;
-                            if (y + deltaY > 0)
-                                deltaY = -y;
-                            else if (y + deltaY < -bottom)
-                                deltaY = -(y + bottom);
-                        } else if (scaleHeight < height) {
-                            deltaY = 0;
-                            if (x + deltaX > 0)
-                                deltaX = -x;
-                            else if (x + deltaX < -right)
-                                deltaX = -(x + right);
-                        } else {
-                            if (x + deltaX > 0)
-                                deltaX = -x;
-                            else if (x + deltaX < -right)
-                                deltaX = -(x + right);
+                        // 检查图片是否需要水平或垂直滚动
+                        boolean needHorizontalScroll = scaleWidth > width;
+                        boolean needVerticalScroll = scaleHeight > height;
 
-                            if (y + deltaY > 0)
-                                deltaY = -y;
-                            else if (y + deltaY < -bottom)
-                                deltaY = -(y + bottom);
+                        if (needHorizontalScroll || needVerticalScroll) {
+                            // 只有在需要水平滚动时才禁止ViewPager2拦截
+                            if (needHorizontalScroll) {
+                                disallowParentInterceptTouchEvent();
+                            }
+
+                            if (scaleWidth < width) {
+                                deltaX = 0;
+                                if (y + deltaY > 0)
+                                    deltaY = -y;
+                                else if (y + deltaY < -bottom)
+                                    deltaY = -(y + bottom);
+                            } else if (scaleHeight < height) {
+                                deltaY = 0;
+                                if (x + deltaX > 0)
+                                    deltaX = -x;
+                                else if (x + deltaX < -right)
+                                    deltaX = -(x + right);
+                            } else {
+                                // 图片同时需要水平和垂直滚动
+                                if (x + deltaX > 0)
+                                    deltaX = -x;
+                                else if (x + deltaX < -right)
+                                    deltaX = -(x + right);
+
+                                if (y + deltaY > 0)
+                                    deltaY = -y;
+                                else if (y + deltaY < -bottom)
+                                    deltaY = -(y + bottom);
+                            }
+
+                            matrix.postTranslate(deltaX, deltaY);
+                            last.set(curr.x, curr.y);
                         }
-
-                        matrix.postTranslate(deltaX, deltaY);
-                        last.set(curr.x, curr.y);
                     } else if (mode == ZOOM) {
                         disallowParentInterceptTouchEvent();
                     }
@@ -160,25 +169,23 @@ public class TouchImageView extends AppCompatImageView {
         width = MeasureSpec.getSize(widthMeasureSpec);
         height = MeasureSpec.getSize(heightMeasureSpec);
 
-        //Fit to screen.
+        // Fit width to screen, align to top
         float scale;
         float scaleX = width / bmWidth;
-        float scaleY = height / bmHeight;
-        scale = Math.min(scaleX, scaleY);
+        scale = scaleX; // 使用宽度缩放比例
         matrix.setScale(scale, scale);
 
-        // Center the image
-        redundantYSpace = height - (scale * bmHeight);
-        redundantXSpace = width - (scale * bmWidth);
-        redundantYSpace /= 2;
-        redundantXSpace /= 2;
+        // Align to top (no vertical centering)
+        redundantYSpace = 0; // 顶部对齐，不需要垂直偏移
+        redundantXSpace = 0; // 宽度已经完全填充，不需要水平偏移
 
         matrix.postTranslate(redundantXSpace, redundantYSpace);
 
-        origWidth = width - 2 * redundantXSpace;
-        origHeight = height - 2 * redundantYSpace;
-        right = width * saveScale - width - (2 * redundantXSpace * saveScale);
-        bottom = height * saveScale - height - (2 * redundantYSpace * saveScale);
+        // 计算图片实际显示的尺寸
+        origWidth = scale * bmWidth;
+        origHeight = scale * bmHeight;
+        right = origWidth * saveScale - width;
+        bottom = origHeight * saveScale - height;
 
         setImageMatrix(matrix);
     }
