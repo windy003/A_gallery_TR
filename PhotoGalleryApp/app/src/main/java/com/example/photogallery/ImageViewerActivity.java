@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.app.RecoverableSecurityException;
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -54,6 +55,12 @@ public class ImageViewerActivity extends AppCompatActivity {
     // 撤销管理器
     private PendingDeleteManager pendingDeleteManager = new PendingDeleteManager();
 
+    // SharedPreferences 相关
+    private static final String PREFS_NAME = "FloatingButtonPrefs";
+    private static final String KEY_FLOATING_X = "floating_x";
+    private static final String KEY_FLOATING_Y = "floating_y";
+    private SharedPreferences prefs;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -100,9 +107,13 @@ public class ImageViewerActivity extends AppCompatActivity {
 
         fileOperationHelper = new FileOperationHelper(this);
 
+        // 初始化 SharedPreferences
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
         setupViewPager();
         setupControls();
         setupFloatingButtonsDrag();
+        restoreFloatingButtonPosition();
         updateUndoButton();
     }
 
@@ -158,6 +169,8 @@ public class ImageViewerActivity extends AppCompatActivity {
                         return true;
 
                     case MotionEvent.ACTION_UP:
+                        // 保存当前位置
+                        saveFloatingButtonPosition();
                         return true;
 
                     default:
@@ -517,5 +530,48 @@ public class ImageViewerActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+    }
+
+    /**
+     * 保存悬浮按钮的位置
+     */
+    private void saveFloatingButtonPosition() {
+        float x = layoutFloatingButtons.getX();
+        float y = layoutFloatingButtons.getY();
+
+        prefs.edit()
+                .putFloat(KEY_FLOATING_X, x)
+                .putFloat(KEY_FLOATING_Y, y)
+                .apply();
+    }
+
+    /**
+     * 恢复悬浮按钮的位置
+     */
+    private void restoreFloatingButtonPosition() {
+        // 等待布局完成后再恢复位置
+        layoutFloatingButtons.post(new Runnable() {
+            @Override
+            public void run() {
+                // 获取保存的位置，如果没有保存过，使用默认值 -1
+                float savedX = prefs.getFloat(KEY_FLOATING_X, -1);
+                float savedY = prefs.getFloat(KEY_FLOATING_Y, -1);
+
+                // 如果之前保存过位置，则恢复
+                if (savedX != -1 && savedY != -1) {
+                    // 获取父容器尺寸
+                    View parent = (View) layoutFloatingButtons.getParent();
+                    int maxX = parent.getWidth() - layoutFloatingButtons.getWidth();
+                    int maxY = parent.getHeight() - layoutFloatingButtons.getHeight();
+
+                    // 确保位置在有效范围内（防止屏幕尺寸改变导致的问题）
+                    float x = Math.max(0, Math.min(savedX, maxX));
+                    float y = Math.max(0, Math.min(savedY, maxY));
+
+                    layoutFloatingButtons.setX(x);
+                    layoutFloatingButtons.setY(y);
+                }
+            }
+        });
     }
 }
